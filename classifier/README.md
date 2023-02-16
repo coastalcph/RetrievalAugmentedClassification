@@ -1,21 +1,6 @@
-# RetrievalAugmentedClassification
+Requirements: `transformers`, `pytorch`,
 
-
-Requirements: `transformers`, `pytorch`, `sentence-transformers`, `datasets`
-
-# Train Retriever
-
-Run with: 
-```
-python train_retriever.py --data_path <FILEPATH> --experiment_name <EXP_NAME>
-```
-
-where FILEPATH is a path to a text file (optionally compressed with gzip), where each line contain either a single document (for unsupervised training) or two tab-separated documents (for supervised training).
-
-
-# Fine-tuning
-
-To fine-tune a model, run:
+Run with:
 
 ```shell
 #!/bin/bash
@@ -60,9 +45,8 @@ python train_classifier \
     --lr_scheduler_type cosine
 ```
 
-# Create custom Longformer
+To use a custom Longformer-based run:
 
-To create and use a custom Longformer-based run `convert_roberta_to_lf` for RoBERTa models and `convert_bert_to_lf` for BERT models:
 
 ```shell
 module load miniconda/4.12.0
@@ -77,11 +61,3 @@ python utils/convert_roberta_to_lf.py \
 ```
 
 then use `MODEL_PATH='data/lexlms/longformer-large'` to fine-tune this model.
-
-For legal tasks:
-- `lexlms/roberta-large-cased`
-- `lexlms/roberta-base-cased`
-
-For biomedical tasks:
-- `bionlp/bluebert_pubmed_mimic_uncased_L-24_H-1024_A-16`
-- `bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12`
