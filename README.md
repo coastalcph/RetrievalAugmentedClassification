@@ -7,10 +7,8 @@ Requirements: `transformers`, `pytorch`, `sentence-transformers`, `datasets`
 
 Run with: 
 ```
-python train_retriever.py --data_path <FILEPATH> --experiment_name <EXP_NAME>
+python train_retriever.py --dataset_name <e.g. ecthr> --experiment_name <EXP_NAME>
 ```
-
-where FILEPATH is a path to a text file (optionally compressed with gzip), where each line contain either a single document (for unsupervised training) or two tab-separated documents (for supervised training).
 
 
 # Fine-tuning
@@ -69,7 +67,7 @@ module load miniconda/4.12.0
 conda activate kiddothe2b
 
 ROBERTA_MODEL_PATH='lexlms/roberta-large-cased'
-OUTPUT_MODEL_PATH = 'lexlms/longformer-large'
+OUTPUT_MODEL_PATH='lexlms/longformer-large'
 
 python utils/convert_roberta_to_lf.py \
 --roberta_checkpoint ${ROBERTA_MODEL_PATH} \
