@@ -14,6 +14,9 @@ import logging
 import math
 from datetime import datetime
 
+from datasets import load_dataset
+from data import AUTH_KEY, DATA_PATH
+
 from torch.utils.data import DataLoader
 from sentence_transformers import models, losses
 from sentence_transformers import LoggingHandler, SentenceTransformer, InputExample
@@ -30,17 +33,9 @@ def load_model(args):
     return model
 
 def load_data(args):
-    ################# Read the train corpus  #################
     train_samples = []
-    with gzip.open(args.data_path, 'rt', encoding='utf8') if args.data_path.endswith('.gz') else open(args.data_path, encoding='utf8') as fIn:
-        for line in tqdm.tqdm(fIn, desc='Read file'):
-            line = line.strip()
-            if '\t' in line:
-                line1, line2 = line.split('\t')
-            else:
-                line1, line2 = line, line
-            if len(line1) >= 10 and len(line2)>10:
-                train_samples.append(InputExample(texts=[line1, line2]))
+    for line in load_dataset(DATA_PATH, args.dataset_name, split="train", use_auth_token=AUTH_KEY):
+            train_samples.append(InputExample(texts=[line['text'], line['text']]))
     logging.info("Train sentences: {}".format(len(train_samples)))
     
     return train_samples
@@ -76,15 +71,15 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model Training')
-    parser.add_argument("--data_path", type=str, help="Path to data. File could contain two tab-separated columns (for supervised training) or one column (for usnuspervised training)")
+    parser.add_argument("--dataset_name", type=str, help="Name of dataset as stored on HF")
     parser.add_argument("--experiments_dir", type=str, default="experiments/", help="Directory where trained models will be saved")
     parser.add_argument("--experiment_name", type=str, default=None, help="Sub directory where trained models will be saved")
 
-    parser.add_argument("--model_name", type=str, default='allenai/longformer-base-4096', help="Model name")
+    parser.add_argument("--model_name", type=str, help="Model name")
 
-    parser.add_argument("--batch_size", type=int, default=16, help="Batch size")
+    parser.add_argument("--batch_size", type=int, default=4, help="Batch size")
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate")
-    parser.add_argument("--num_epochs", type=int, default=30, help="Number of training epochs")
+    parser.add_argument("--num_epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--max_seq_length", type=int, default=4096, help="Maximum sequence length")
     
     args = parser.parse_args()
