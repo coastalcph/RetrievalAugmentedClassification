@@ -1,4 +1,5 @@
 import argparse
+import random
 
 import torch
 import copy
@@ -13,12 +14,12 @@ def convert_bert_to_lf():
     parser = argparse.ArgumentParser()
 
     # Required arguments
-    parser.add_argument('--bert_checkpoint', default='bionlp/bluebert_pubmed_mimic_uncased_L-24_H-1024_A-16',
+    parser.add_argument('--bert_checkpoint', default='bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12',
                         help='Path to the pre-trained RoBERTa model directory')
-    parser.add_argument('--output_model_path', default='bionlp/longformer-large',
+    parser.add_argument('--output_model_path', default='bio-longformer-base',
                         help='Path to the pre-trained RoBERTa model directory')
     parser_config = parser.parse_args()
-    BERT_CHECKPOINT = parser_config.roberta_checkpoint
+    BERT_CHECKPOINT = parser_config.bert_checkpoint
 
     # load pre-trained bert model and tokenizer
     bert_model = AutoModelForMaskedLM.from_pretrained(BERT_CHECKPOINT)
@@ -55,7 +56,8 @@ def convert_bert_to_lf():
     step = bert_config.max_position_embeddings - 1
     while k < lf_config.max_position_embeddings - 1:
         if k + step >= lf_config.max_position_embeddings:
-            lf_model.longformer.embeddings.position_embeddings.weight.data[k:] = bert_model.bert.embeddings.position_embeddings.weight[1:(bert_config.max_position_embeddings + 1 - k)]
+            remaining_tokens = len(lf_model.longformer.embeddings.position_embeddings.weight.data[k:])
+            lf_model.longformer.embeddings.position_embeddings.weight.data[k:] = bert_model.bert.embeddings.position_embeddings.weight[1:(remaining_tokens + 1)]
         else:
             lf_model.longformer.embeddings.position_embeddings.weight.data[k:(k + step)] = bert_model.bert.embeddings.position_embeddings.weight[1:]
         k += step
