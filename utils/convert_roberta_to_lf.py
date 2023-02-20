@@ -14,7 +14,7 @@ def convert_roberta_to_lf():
     # Required arguments
     parser.add_argument('--roberta_checkpoint', default='lexlms/roberta-large-cased',
                         help='Path to the pre-trained RoBERTa model directory')
-    parser.add_argument('--output_model_path', default='lexlms/longformer-large',
+    parser.add_argument('--output_model_path', default='legal-longformer-base',
                         help='Path to the pre-trained RoBERTa model directory')
     parser_config = parser.parse_args()
     ROBERTA_CHECKPOINT = parser_config.roberta_checkpoint

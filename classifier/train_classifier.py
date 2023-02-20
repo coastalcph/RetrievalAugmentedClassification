@@ -22,7 +22,6 @@ import transformers
 from transformers import (
     Trainer,
     AutoConfig,
-    AutoModelForSequenceClassification,
     AutoTokenizer,
     EvalPrediction,
     HfArgumentParser,
@@ -33,8 +32,9 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
-from data import AUTH_KEY, DATA_DIR
+from data import AUTH_KEY
 from data_collator import DataCollatorForMultiLabelClassification
+from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification
 from data.multilabel_bench.label_descriptors import EUROVOC_CONCEPTS, ICD9_CONCEPTS, MESH_CONCEPTS, UKLEX_CONCEPTS, ECTHR_ARTICLES
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.20.0")
@@ -123,6 +123,12 @@ class ModelArguments:
     )
     tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
+    )
+    retrieval_augmentation: Optional[bool] = field(
+        default=False, metadata={"help": "Whether to use retrieval augmentation or not"}
+    )
+    retrieved_documents: Optional[int] = field(
+        default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
     cache_dir: Optional[str] = field(
         default=None,
@@ -252,6 +258,8 @@ def main():
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
     )
+    # add retrieval_augmentation param in config
+    config.retrieval_augmentation = model_args.retrieval_augmentation
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -260,13 +268,22 @@ def main():
         revision=model_args.model_revision,
     )
 
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_args.model_name_or_path,
-        from_tf=bool(".ckpt" in model_args.model_name_or_path),
-        config=config,
-        cache_dir=model_args.cache_dir,
-        revision=model_args.model_revision,
-    )
+    if "longformer" in model_args.model_name_or_path:
+        model = RALongformerForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+        )
+    else:
+        model = RABERTForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+        )
 
     # Preprocessing the datasets
     # Padding strategy
@@ -297,9 +314,14 @@ def main():
             truncation=True,
         )
 
-        batch["global_attention_mask"] = np.zeros((len(examples["text"]), data_args.max_seq_length), dtype=int)
-        batch["global_attention_mask"][:, 0] = 1
-        batch["global_attention_mask"] = list(batch["global_attention_mask"])
+        if 'longformer' in model_args.model_name_or_path:
+            batch["global_attention_mask"] = np.zeros((len(examples["text"]), data_args.max_seq_length), dtype=int)
+            batch["global_attention_mask"][:, 0] = 1
+            batch["global_attention_mask"] = list(batch["global_attention_mask"])
+
+        if model_args.retrieval_augmentation:
+            batch["decoder_input_ids"] = np.zeros((len(examples["text"]), 8, 768), dtype=np.float32)
+            batch["decoder_attention_mask"] = np.ones((len(examples["text"]), 8), dtype=int)
 
         batch["label_ids"] = [[1.0 if label in labels else 0.0 for label in label_list] for labels in examples["labels"]]
         batch['labels'] = batch['label_ids']
@@ -308,7 +330,9 @@ def main():
 
     if training_args.do_train:
         if data_args.max_train_samples is not None:
-            train_dataset = train_dataset.select(range(data_args.max_train_samples))
+            random.seed(42)
+            sample_ids = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
+            train_dataset = train_dataset.select(sample_ids)
         with training_args.main_process_first(desc="train dataset map pre-processing"):
             train_dataset = train_dataset.map(
                 preprocess_function,

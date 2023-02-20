@@ -30,9 +30,12 @@ echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
 MODEL_PATH='allenai/longformer-base-4096'
 DATASET_NAME='ecthr'
+RETRIEVAL_AUGMENTED_MODEL=false
 
 python train_classifier \
     --model_name_or_path ${MODEL_PATH} \
+    --retrieval_augmentation ${RETRIEVAL_AUGMENTED_MODEL} \
+    --retrieved_documents 16 \
     --dataset_name ${DATASET_NAME} \
     --output_dir ../data/${DATASET_NAME}/${MODEL_PATH} \
     --do_train \
@@ -46,7 +49,7 @@ python train_classifier \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --save_total_limit 5 \
-    --learning_rate 1e-5 \
+    --learning_rate 3e-5 \
     --per_device_train_batch_size 16 \
     --per_device_eval_batch_size 16 \
     --seed 42 \
