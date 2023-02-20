@@ -296,7 +296,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
 
 
 if __name__ == "__main__":
-    from transformers import AutoTokenizer
+    from transformers import AutoTokenizer, AutoConfig
     import numpy as np
     # model = RALongformerForSequenceClassification.from_pretrained('kiddothe2b/legal-longformer-base')
     # tokenizer = AutoTokenizer.from_pretrained('kiddothe2b/legal-longformer-base')
@@ -311,7 +311,11 @@ if __name__ == "__main__":
     #       labels=torch.zeros(len(inputs['input_ids']), 20))
     # print()
 
-    model = RABERTForSequenceClassification.from_pretrained('bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12')
+    config = AutoConfig.from_pretrained('bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12')
+    config.retrieval_augmentation = True
+    config.num_labels = 20
+    model = RABERTForSequenceClassification.from_pretrained('bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12',
+                                                            config=config)
     tokenizer = AutoTokenizer.from_pretrained('bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12')
     inputs = tokenizer(['dog ' * 256 for _ in range(3)], truncation=True, max_length=256,
                        padding='max_length', return_tensors='pt')
