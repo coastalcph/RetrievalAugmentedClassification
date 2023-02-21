@@ -18,6 +18,7 @@ from scipy.special import expit
 import glob
 import shutil
 import json
+import h5py
 
 import transformers
 from transformers import (
@@ -36,7 +37,7 @@ from transformers.utils.versions import require_version
 from data import AUTH_KEY, DATA_DIR
 from data_collator import DataCollatorForMultiLabelClassification
 from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification
-from data.multilabel_bench.label_descriptors import EUROVOC_CONCEPTS, ICD9_CONCEPTS, MESH_CONCEPTS, UKLEX_CONCEPTS, ECTHR_ARTICLES
+
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.20.0")
 
@@ -134,7 +135,7 @@ class ModelArguments:
     retrieval_augmentation: Optional[bool] = field(
         default=False, metadata={"help": "Whether to use retrieval augmentation or not"}
     )
-    retrieved_documents: Optional[int] = field(
+    no_neighbors: Optional[int] = field(
         default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
     cache_dir: Optional[str] = field(
@@ -158,14 +159,14 @@ class ModelArguments:
     )
 
 
-def update_dataset(dataset, datastore, embeddings_path):
+def update_dataset(dataset, datastore, embeddings_path, no_neighbors=16):
     # Augment with neighbors
     with open(embeddings_path) as file:
         neighbors = json.load(file)
 
     def add_neighbors(example):
-        doc_neighbors = neighbors[example['doc_id']]
-        example["neighbor_embeddings"] = [datastore[doc_id] for doc_id in doc_neighbors]
+        doc_neighbors = [neighbor['doc_id'] for neighbor in neighbors[example['doc_id']][:no_neighbors]]
+        example["neighbor_embeddings"] = [datastore[doc_id][:] for doc_id in doc_neighbors]
         return example
 
     return dataset.map(add_neighbors)
@@ -229,8 +230,6 @@ def main():
     label_list = None
 
     if model_args.retrieval_augmentation:
-        import h5py
-        import json
         datastore = h5py.File(os.path.join(DATA_DIR, data_args.embeddings_path, 'corpus.hdf5'))
 
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
@@ -239,10 +238,6 @@ def main():
     if training_args.do_train:
         train_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="train",
                                      cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
-
-        if model_args.retrieval_augmentation:
-            train_dataset = update_dataset(train_dataset, datastore,
-                                           os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'))
 
         # Labels
         label_list = list(
@@ -254,10 +249,6 @@ def main():
         eval_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="validation",
                                     cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
 
-        if model_args.retrieval_augmentation:
-            eval_dataset = update_dataset(eval_dataset, datastore,
-                                          os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'))
-
         if label_list is None:
             # Labels
             label_list = list(
@@ -268,10 +259,6 @@ def main():
     if training_args.do_predict:
         predict_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="test",
                                        cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
-
-        if model_args.retrieval_augmentation:
-            predict_dataset = update_dataset(predict_dataset, datastore,
-                                             os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'))
 
         if label_list is None:
             # Labels
@@ -360,8 +347,8 @@ def main():
             batch["global_attention_mask"] = list(batch["global_attention_mask"])
 
         if model_args.retrieval_augmentation:
-            batch["decoder_input_ids"] = np.zeros((len(examples["text"]), 8, 768), dtype=np.float32)
-            batch["decoder_attention_mask"] = np.ones((len(examples["text"]), 8), dtype=int)
+            batch["decoder_input_ids"] = examples["neighbor_embeddings"]
+            batch["decoder_attention_mask"] = np.ones((len(batch["decoder_input_ids"]), model_args.no_neighbors), dtype=int)
 
         batch["label_ids"] = [[1.0 if label in labels else 0.0 for label in label_list] for labels in examples["labels"]]
         batch['labels'] = batch['label_ids']
@@ -373,6 +360,10 @@ def main():
             random.seed(42)
             sample_ids = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
             train_dataset = train_dataset.select(sample_ids)
+        if model_args.retrieval_augmentation:
+            train_dataset = update_dataset(train_dataset, datastore,
+                                           embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
+                                           no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="train dataset map pre-processing"):
             train_dataset = train_dataset.map(
                 preprocess_function,
@@ -388,6 +379,10 @@ def main():
     if training_args.do_eval:
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
+        if model_args.retrieval_augmentation:
+            eval_dataset = update_dataset(eval_dataset, datastore,
+                                          embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'),
+                                          no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="validation dataset map pre-processing"):
             eval_dataset = eval_dataset.map(
                 preprocess_function,
@@ -400,6 +395,10 @@ def main():
     if training_args.do_predict:
         if data_args.max_predict_samples is not None:
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
+        if model_args.retrieval_augmentation:
+            predict_dataset = update_dataset(predict_dataset, datastore,
+                                             embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'),
+                                             no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
             predict_dataset = predict_dataset.map(
                 preprocess_function,

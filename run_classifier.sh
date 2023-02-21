@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=bioasq-pubmedbert-base
 #SBATCH --cpus-per-task=8 --mem=8000M
-#SBATCH -p gpu --gres=gpu:titanrtx:1
+#SBATCH -p gpu --gres=gpu:a100:1
 #SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-pubmedbert-base.txt
 #SBATCH --time=8:00:00
 
