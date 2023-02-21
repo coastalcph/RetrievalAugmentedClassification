@@ -12,7 +12,8 @@ echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
 MODEL_PATH='bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12'
 DATASET_NAME='bioasq-l2'
-
+export PYTHONPATH=.
+export TOKENIZERS_PARALLELISM=false
 
 python classifier/train_classifier \
     --model_name_or_path ${MODEL_PATH} \
