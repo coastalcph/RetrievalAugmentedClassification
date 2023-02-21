@@ -34,7 +34,7 @@ python classifier/train_classifier.py \
     --evaluation_strategy epoch \
     --save_strategy epoch \
     --save_total_limit 5 \
-    --learning_rate 1e-5 \
+    --learning_rate 3e-5 \
     --per_device_train_batch_size 32 \
     --per_device_eval_batch_size 32 \
     --seed 42 \
