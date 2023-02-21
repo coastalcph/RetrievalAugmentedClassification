@@ -15,7 +15,7 @@ DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
 
-python classifier/train_classifier \
+python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
     --dataset_name ${DATASET_NAME} \
     --output_dir data/${DATASET_NAME}/${MODEL_PATH} \

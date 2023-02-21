@@ -17,6 +17,7 @@ from sklearn.metrics import f1_score, classification_report
 from scipy.special import expit
 import glob
 import shutil
+import json
 
 import transformers
 from transformers import (
@@ -32,7 +33,7 @@ from transformers import (
 from transformers.trainer_utils import get_last_checkpoint
 from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
-from data import AUTH_KEY
+from data import AUTH_KEY, DATA_DIR
 from data_collator import DataCollatorForMultiLabelClassification
 from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification
 from data.multilabel_bench.label_descriptors import EUROVOC_CONCEPTS, ICD9_CONCEPTS, MESH_CONCEPTS, UKLEX_CONCEPTS, ECTHR_ARTICLES
@@ -65,6 +66,12 @@ class DataTrainingArguments:
         metadata={
             "help": "The maximum total input sequence length after tokenization. Sequences longer "
                     "than this will be truncated, sequences shorter will be padded."
+        },
+    )
+    embeddings_path: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The path where the neighbor documents embeddings are saved."
         },
     )
     max_seq_length: Optional[int] = field(
@@ -151,6 +158,19 @@ class ModelArguments:
     )
 
 
+def update_dataset(dataset, datastore, embeddings_path):
+    # Augment with neighbors
+    with open(embeddings_path) as file:
+        neighbors = json.load(file)
+
+    def add_neighbors(example):
+        doc_neighbors = neighbors[example['doc_id']]
+        example["neighbor_embeddings"] = [datastore[doc_id] for doc_id in doc_neighbors]
+        return example
+
+    return dataset.map(add_neighbors)
+
+
 def main():
     # See all possible arguments in src/transformers/training_args.py
     # or by passing the --help flag to this script.
@@ -208,12 +228,22 @@ def main():
     set_seed(training_args.seed)
     label_list = None
 
+    if model_args.retrieval_augmentation:
+        import h5py
+        import json
+        datastore = h5py.File(os.path.join(DATA_DIR, data_args.embeddings_path, 'corpus.hdf5'))
+
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
     # Downloading and loading eurlex dataset from the hub.
     if training_args.do_train:
         train_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="train",
                                      cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+
+        if model_args.retrieval_augmentation:
+            train_dataset = update_dataset(train_dataset, datastore,
+                                           os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'))
+
         # Labels
         label_list = list(
             range(train_dataset.features['labels'].feature.num_classes))
@@ -223,6 +253,11 @@ def main():
     if training_args.do_eval:
         eval_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="validation",
                                     cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+
+        if model_args.retrieval_augmentation:
+            eval_dataset = update_dataset(eval_dataset, datastore,
+                                          os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'))
+
         if label_list is None:
             # Labels
             label_list = list(
@@ -233,6 +268,11 @@ def main():
     if training_args.do_predict:
         predict_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="test",
                                        cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+
+        if model_args.retrieval_augmentation:
+            predict_dataset = update_dataset(predict_dataset, datastore,
+                                             os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'))
+
         if label_list is None:
             # Labels
             label_list = list(

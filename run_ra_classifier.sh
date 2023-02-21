@@ -11,12 +11,14 @@ conda activate kiddothe2b
 echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
 MODEL_PATH='microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
+EMBEDDINGS_FOLDER='bioasq-l2-pubmedbert-embeddings'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
 
-python classifier/train_classifier \
+python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
+    --embeddings_path ${EMBEDDINGS_FOLDER} \
     --retrieval_augmentation true \
     --retrieved_documents 16 \
     --dataset_name ${DATASET_NAME} \

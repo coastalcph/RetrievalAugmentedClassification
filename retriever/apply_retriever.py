@@ -9,7 +9,7 @@ from sentence_transformers import SentenceTransformer, util, models
 from datasets import load_dataset
 import torch
 
-from data import AUTH_KEY
+from data import AUTH_KEY, DATA_DIR
 
 
 def load_data(args):
@@ -19,7 +19,7 @@ def load_data(args):
     sample_ids = random.sample(range(len(corpus)), k=min(10000, len(corpus)))
     queries = {}
     queries['train'] = corpus.select(sample_ids)
-    queries['val'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
+    queries['validation'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
     queries['test'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="test", use_auth_token=AUTH_KEY)
 
     return corpus, queries
@@ -46,12 +46,16 @@ def find_neighbors(embedder, corpus, corpus_embeddings, queries):
     return query2neighbors
 
 def write_embeddings(args, corpus, corpus_embeddings):
-    h5py_file = h5py.File(os.path.join(args.output_dir, 'corpus.hdf5'), 'w')
+    if not os.path.exists(os.path.join(DATA_DIR, args.output_dir)):
+        os.mkdir(os.path.join(DATA_DIR, args.output_dir))
+    h5py_file = h5py.File(os.path.join(DATA_DIR, args.output_dir, 'corpus.hdf5'), 'w')
     for doc_id, embedding in zip(corpus['doc_id'], corpus_embeddings):
         h5py_file.create_dataset(doc_id, embedding.shape, data=embedding.cpu())
 
 def write_neighbors(args, split, query2neighbors):
-    output_path = os.path.join(args.output_dir, '{}.json'.format(split))
+    if not os.path.exists(os.path.join(DATA_DIR, args.output_dir)):
+        os.mkdir(os.path.join(DATA_DIR, args.output_dir))
+    output_path = os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
@@ -76,7 +80,7 @@ def main(args):
     corpus_embeddings = embedder.encode(corpus['text'], convert_to_tensor=True)
     write_embeddings(args, corpus, corpus_embeddings)
 
-    for split in ['train', 'val', 'test']:
+    for split in ['train', 'validation', 'test']:
         print('Processing {} split'.format(split))
         query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split])
         write_neighbors(args, split, query2neighbors)

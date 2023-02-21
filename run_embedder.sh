@@ -11,7 +11,7 @@ conda activate kiddothe2b
 echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
 MODEL_PATH='data/bioasq-l2/microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
-OUTPUT_DIR='data/bioasq-biomedbert-base-embeddings'
+OUTPUT_DIR='bioasq-biomedbert-base-embeddings'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
