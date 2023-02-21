@@ -56,11 +56,16 @@ def write_neighbors(args, split, query2neighbors):
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
-    embedder = SentenceTransformer(args.model_name)
+    if 'st' in args.model_name:
+        embedder = SentenceTransformer(args.model_name)
+    else:
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+        pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='cls')
+        embedder = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
     corpus, queries = load_data(args)
     print('Embedding corpus...')
-    corpus_embeddings = embedder.encode(corpus['text'][:100], convert_to_tensor=True)
+    corpus_embeddings = embedder.encode(corpus['text'], convert_to_tensor=True)
     write_embeddings(args, corpus, corpus_embeddings)
 
     for split in ['train', 'val', 'test']:
