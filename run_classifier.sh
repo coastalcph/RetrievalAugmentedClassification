@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=bioasq-bluebert
+#SBATCH --job-name=bioasq-pubmedbert-base
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:titanrtx:1
-#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-bluebert.txt
+#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-pubmedbert-base.txt
 #SBATCH --time=8:00:00
 
 module load miniconda/4.12.0
@@ -10,7 +10,7 @@ conda activate kiddothe2b
 
 echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
-MODEL_PATH='bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12'
+MODEL_PATH='microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
@@ -31,8 +31,8 @@ python classifier/train_classifier \
     --save_strategy epoch \
     --save_total_limit 5 \
     --learning_rate 3e-5 \
-    --per_device_train_batch_size 16 \
-    --per_device_eval_batch_size 16 \
+    --per_device_train_batch_size 32 \
+    --per_device_eval_batch_size 32 \
     --seed 42 \
     --num_train_epochs 20 \
     --max_train_samples 10000 \
