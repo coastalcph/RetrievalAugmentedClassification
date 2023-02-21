@@ -1,27 +1,26 @@
 import os
 import json
-from tqdm import tqdm
-import argparse 
+import argparse
 import h5py
 import random
 random.seed(42)
 
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import SentenceTransformer, util, models
 from datasets import load_dataset
 import torch
 
-from data import AUTH_KEY, DATA_PATH
+from data import AUTH_KEY
 
 
 def load_data(args):
     
-    corpus = load_dataset(DATA_PATH, args.dataset_name, split="train", use_auth_token=AUTH_KEY)
-    
+    corpus = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="train", use_auth_token=AUTH_KEY)
+
     sample_ids = random.sample(range(len(corpus)), k=min(10000, len(corpus)))
     queries = {}
     queries['train'] = corpus.select(sample_ids)
-    queries['val'] = load_dataset(DATA_PATH, args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
-    queries['test'] = load_dataset(DATA_PATH, args.dataset_name, split="test", use_auth_token=AUTH_KEY)
+    queries['val'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
+    queries['test'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="test", use_auth_token=AUTH_KEY)
 
     return corpus, queries
 
@@ -56,10 +55,19 @@ def write_neighbors(args, split, query2neighbors):
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
-    if 'st' in args.model_name:
+    if 'sentence' in args.model_name:
         embedder = SentenceTransformer(args.model_name)
     else:
+        from torch import nn
+        class Pooler(nn.Module):
+            def __init__(self):
+                super().__init__()
+            def forward(self, x):
+                return x
+
         word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+        if word_embedding_model.auto_model.config.model_type == 'bert':
+            word_embedding_model.auto_model.pooler = Pooler()
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='cls')
         embedder = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
@@ -73,14 +81,17 @@ def main(args):
         query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split])
         write_neighbors(args, split, query2neighbors)
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model Training')
-    parser.add_argument("--dataset_name", type=str, help="Name of dataset as stored on HF")
+    parser.add_argument("--dataset_name", type=str, default='bioasq-l2', help="Name of dataset as stored on HF")
     parser.add_argument("--output_dir", type=str, help="Where to store the cached embedding vectors and NN ids")
 
     parser.add_argument("--model_name", type=str, help="Directory where trained model is saved")
 
-    parser.add_argument("--k", type=int, default=10, help="Number of NNs to save")
+    parser.add_argument("--max_seq_length", type=int, default=512, help="Max length")
+
+    parser.add_argument("--k", type=int, default=16, help="Number of NNs to save")
 
     args = parser.parse_args()
 

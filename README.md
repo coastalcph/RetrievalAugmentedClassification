@@ -84,5 +84,5 @@ For legal tasks:
 - `lexlms/roberta-base-cased`
 
 For biomedical tasks:
-- `bionlp/bluebert_pubmed_mimic_uncased_L-24_H-1024_A-16`
-- `bionlp/bluebert_pubmed_mimic_uncased_L-12_H-768_A-12`
+- `microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract`
+- `microsoft/BiomedNLP-PubMedBERT-large-uncased-abstract`
