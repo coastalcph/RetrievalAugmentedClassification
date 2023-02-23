@@ -2,7 +2,7 @@
 #SBATCH --job-name=bioasq-ra-pubmedbert-base-tuning
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:a100:1
-#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-ra-pubmedbert-base.txt
+#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-ra-pubmedbert-base-tuning.txt
 #SBATCH --time=32:00:00
 
 module load miniconda/4.12.0
