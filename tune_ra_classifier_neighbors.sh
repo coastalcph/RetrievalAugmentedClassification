@@ -53,3 +53,6 @@ do
           --fp16 \
           --fp16_full_eval \
           --lr_scheduler_type cosine
+    done
+  done
+done
