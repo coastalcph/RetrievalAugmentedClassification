@@ -22,34 +22,34 @@ do
   do
     for DEC_AHS in 1 2 4
     do
-    python classifier/train_classifier.py \
-        --model_name_or_path ${MODEL_PATH} \
-        --embeddings_path ${EMBEDDINGS_FOLDER} \
-        --retrieval_augmentation true \
-        --no_neighbors ${NO_NEIGHBORS} \
-        --dec_layers ${DEC_LAYERS} \
-        --dec_attention_heads ${DEC_AHS} \
-        --dataset_name ${DATASET_NAME} \
-        --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/nn-${NO_NEIGHBORS}-dl-${DEC_LAYERS}-${DEC_AHS} \
-        --do_train \
-        --do_eval \
-        --do_pred \
-        --overwrite_output_dir \
-        --load_best_model_at_end \
-        --metric_for_best_model micro-f1 \
-        --greater_is_better True \
-        --max_seq_length 512 \
-        --evaluation_strategy epoch \
-        --save_strategy epoch \
-        --save_total_limit 5 \
-        --learning_rate 3e-5 \
-        --per_device_train_batch_size 32 \
-        --per_device_eval_batch_size 32 \
-        --seed 42 \
-        --num_train_epochs 20 \
-        --max_train_samples 10000 \
-        --warmup_ratio 0.05 \
-        --weight_decay 0.01 \
-        --fp16 \
-        --fp16_full_eval \
-        --lr_scheduler_type cosine
+      python classifier/train_classifier.py \
+          --model_name_or_path ${MODEL_PATH} \
+          --embeddings_path ${EMBEDDINGS_FOLDER} \
+          --retrieval_augmentation true \
+          --no_neighbors ${NO_NEIGHBORS} \
+          --dec_layers ${DEC_LAYERS} \
+          --dec_attention_heads ${DEC_AHS} \
+          --dataset_name ${DATASET_NAME} \
+          --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/nn-${NO_NEIGHBORS}-dl-${DEC_LAYERS}-${DEC_AHS} \
+          --do_train \
+          --do_eval \
+          --do_pred \
+          --overwrite_output_dir \
+          --load_best_model_at_end \
+          --metric_for_best_model micro-f1 \
+          --greater_is_better True \
+          --max_seq_length 512 \
+          --evaluation_strategy epoch \
+          --save_strategy epoch \
+          --save_total_limit 5 \
+          --learning_rate 3e-5 \
+          --per_device_train_batch_size 32 \
+          --per_device_eval_batch_size 32 \
+          --seed 42 \
+          --num_train_epochs 20 \
+          --max_train_samples 10000 \
+          --warmup_ratio 0.05 \
+          --weight_decay 0.01 \
+          --fp16 \
+          --fp16_full_eval \
+          --lr_scheduler_type cosine
