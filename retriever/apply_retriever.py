@@ -24,14 +24,17 @@ def load_data(args):
 
     return corpus, queries
 
-def find_neighbors(embedder, corpus, corpus_embeddings, queries):
+def find_neighbors(embedder, corpus, corpus_embeddings, queries, split):
 
     query2neighbors = {}
-
     top_k = min(args.k + 1, len(corpus))
+    
+    h5py_file = h5py.File(os.path.join(DATA_DIR, args.output_dir, '{}.hdf5'.format(split)), 'w')
+    
     for query in queries:
         query_embedding = embedder.encode(query['text'], convert_to_tensor=True)
- 
+        h5py_file.create_dataset(query['doc_id'], query_embedding.shape, data=query_embedding.cpu())
+
         cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
         top_results = torch.topk(cos_scores, k=top_k)
         
@@ -82,7 +85,7 @@ def main(args):
 
     for split in ['train', 'validation', 'test']:
         print('Processing {} split'.format(split))
-        query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split])
+        query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], split)
         write_neighbors(args, split, query2neighbors)
 
 
