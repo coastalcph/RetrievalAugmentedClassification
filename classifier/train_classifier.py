@@ -132,6 +132,15 @@ class ModelArguments:
     tokenizer_name: Optional[str] = field(
         default=None, metadata={"help": "Pretrained tokenizer name or path if not the same as model_name"}
     )
+    encode_document: Optional[bool] = field(
+        default=True, metadata={"help": "Whether to encode input document or not"}
+    )
+    dec_layers: Optional[int] = field(
+        default=1, metadata={"help": "Number of decoder layers for RA"}
+    )
+    dec_attention_heads: Optional[int] = field(
+        default=1, metadata={"help": "Number of attention heads for RA"}
+    )
     retrieval_augmentation: Optional[bool] = field(
         default=False, metadata={"help": "Whether to use retrieval augmentation or not"}
     )
@@ -167,6 +176,7 @@ def update_dataset(dataset, datastore, embeddings_path, no_neighbors=16):
     def add_neighbors(example):
         doc_neighbors = [neighbor['doc_id'] for neighbor in neighbors[example['doc_id']][:no_neighbors]]
         example["neighbor_embeddings"] = [datastore[doc_id][:] for doc_id in doc_neighbors]
+        # example["doc_embedding"] = datastore[example['doc_id']][:]
         return example
 
     return dataset.map(add_neighbors)
@@ -287,6 +297,9 @@ def main():
     )
     # add retrieval_augmentation param in config
     config.retrieval_augmentation = model_args.retrieval_augmentation
+    config.encode_document = model_args.encode_document
+    config.dec_layers = model_args.dec_layers
+    config.dec_attention_heads = model_args.dec_attention_heads
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
@@ -350,6 +363,9 @@ def main():
             batch["decoder_input_ids"] = examples["neighbor_embeddings"]
             batch["decoder_attention_mask"] = np.ones((len(batch["decoder_input_ids"]), model_args.no_neighbors), dtype=int)
 
+        if not model_args.encode_document:
+            batch["input_embeds"] = examples['doc_embedding']
+
         batch["label_ids"] = [[1.0 if label in labels else 0.0 for label in label_list] for labels in examples["labels"]]
         batch['labels'] = batch['label_ids']
 
@@ -358,7 +374,7 @@ def main():
     if training_args.do_train:
         if data_args.max_train_samples is not None:
             random.seed(42)
-            sample_ids = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
+            sample_ids = random.sample(range(len(train_dataset)), k=10000)[:data_args.max_train_samples]
             train_dataset = train_dataset.select(sample_ids)
         if model_args.retrieval_augmentation:
             train_dataset = update_dataset(train_dataset, datastore,

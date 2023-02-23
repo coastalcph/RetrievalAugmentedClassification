@@ -20,6 +20,7 @@ python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
     --embeddings_path ${EMBEDDINGS_FOLDER} \
     --retrieval_augmentation true \
+    --encode_document true \
     --no_neighbors 16 \
     --dataset_name ${DATASET_NAME} \
     --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra \

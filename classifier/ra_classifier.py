@@ -172,17 +172,21 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
         super().__init__(config)
 
         # document encoder
-        self.bert = BertModel(config, add_pooling_layer=False)
+        if not config.retrieval_augmentation or (config.retrieval_augmentation and config.encode_document):
+            self.bert = BertModel(config, add_pooling_layer=False)
+        else:
+            self.bert = None
 
-        self.retrieval_augmentation = config.retrieval_augmentation
+        # retrieval-augmented decoder
         if config.retrieval_augmentation:
-            # retrieval-augmented decoder
             self.ra_config = LEDConfig()
             self.ra_config.d_model = config.hidden_size
             self.ra_config.decoder_ffn_dim = config.hidden_size
-            self.ra_config.decoder_attention_heads = 1
-            self.ra_config.decoder_layers = 1
+            self.ra_config.decoder_attention_heads = config.dec_attention_heads
+            self.ra_config.decoder_layers = config.dec_layers
             self.ra_decoder = LEDDecoder(self.ra_config)
+        else:
+            self.ra_decoder = None
 
         # classifier
         self.num_labels = config.num_labels
@@ -207,6 +211,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             self,
             input_ids: Optional[torch.Tensor] = None,
             attention_mask: Optional[torch.Tensor] = None,
+            input_embeds: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
             decoder_attention_mask: Optional[torch.Tensor] = None,
             labels: Optional[torch.Tensor] = None,
@@ -222,19 +227,22 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
                 """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        encoder_outputs = self.bert(
-            input_ids,
-            attention_mask=attention_mask,
-            head_mask=None,
-            token_type_ids=None,
-            position_ids=None,
-            inputs_embeds=None,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+        if self.bert:
+            encoder_outputs = self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                head_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                inputs_embeds=None,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+        else:
+            encoder_outputs = [torch.unsqueeze(input_embeds, dim=1)]
 
-        if self.retrieval_augmentation:
+        if self.ra_decoder:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
