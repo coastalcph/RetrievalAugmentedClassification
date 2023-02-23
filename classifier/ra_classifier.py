@@ -298,8 +298,8 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
         return SequenceClassifierOutput(
             loss=loss,
             logits=logits,
-            hidden_states=decoder_outputs.hidden_states if self.retrieval_augmentation else encoder_outputs.hidden_states,
-            attentions=decoder_outputs.cross_attentions if self.retrieval_augmentation else encoder_outputs.attentions,
+            hidden_states=decoder_outputs.hidden_states if self.ra_decoder else encoder_outputs.hidden_states,
+            attentions=decoder_outputs.cross_attentions if self.ra_decoder else encoder_outputs.attentions,
         )
 
 
