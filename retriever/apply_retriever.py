@@ -9,18 +9,18 @@ from sentence_transformers import SentenceTransformer, util, models
 from datasets import load_dataset
 import torch
 
-from data import AUTH_KEY, DATA_DIR
+from data import AUTH_KEY, DATA_DIR, DATA_PATH
 
 
 def load_data(args):
     
-    corpus = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="train", use_auth_token=AUTH_KEY)
+    corpus = load_dataset(DATA_PATH, args.dataset_name, split="train", use_auth_token=AUTH_KEY)
 
     sample_ids = random.sample(range(len(corpus)), k=min(10000, len(corpus)))
     queries = {}
     queries['train'] = corpus.select(sample_ids)
-    queries['validation'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
-    queries['test'] = load_dataset('kiddothe2b/multilabel_bench', args.dataset_name, split="test", use_auth_token=AUTH_KEY)
+    queries['validation'] = load_dataset(DATA_PATH, args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
+    queries['test'] = load_dataset(DATA_PATH, args.dataset_name, split="test", use_auth_token=AUTH_KEY)
 
     return corpus, queries
 
@@ -34,7 +34,6 @@ def find_neighbors(embedder, corpus, corpus_embeddings, queries, split):
     for query in queries:
         query_embedding = embedder.encode(query['text'], convert_to_tensor=True)
         h5py_file.create_dataset(query['doc_id'], query_embedding.shape, data=query_embedding.cpu())
-
         cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
         top_results = torch.topk(cos_scores, k=top_k)
         
@@ -98,7 +97,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--max_seq_length", type=int, default=512, help="Max length")
 
-    parser.add_argument("--k", type=int, default=16, help="Number of NNs to save")
+    parser.add_argument("--k", type=int, default=32, help="Number of NNs to save")
 
     args = parser.parse_args()
 

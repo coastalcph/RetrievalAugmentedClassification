@@ -24,7 +24,10 @@ from sentence_transformers import LoggingHandler, SentenceTransformer, InputExam
 
 def load_model(args):
     # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
-    word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+    if args.max_seq_length <= 512:
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+    else:
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length, model_args={'attention_window': [128] * 12})
 
     # Apply mean pooling to get one fixed sized sentence vector
     pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='cls')
@@ -72,7 +75,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Model Training')
     parser.add_argument("--dataset_name", type=str, help="Name of dataset as stored on HF")
-    parser.add_argument("--experiments_dir", type=str, default="experiments/", help="Directory where trained models will be saved")
+    parser.add_argument("--experiments_dir", type=str, default="retriever/models/", help="Directory where trained models will be saved")
     parser.add_argument("--experiment_name", type=str, default=None, help="Sub directory where trained models will be saved")
 
     parser.add_argument("--model_name", type=str, help="Model name")
