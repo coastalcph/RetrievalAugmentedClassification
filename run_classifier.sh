@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=bioasq-pubmedbert-base
+#SBATCH --job-name=eurlex-lexlm-base
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:a100:1
-#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-pubmedbert-base.txt
+#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/eurlex-lexlm-base.txt
 #SBATCH --time=8:00:00
 
 module load miniconda/4.12.0
@@ -10,14 +10,15 @@ conda activate kiddothe2b
 
 echo $SLURMD_NODENAME
 echo $CUDA_VISIBLE_DEVICES
-MODEL_PATH='microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
-DATASET_NAME='bioasq-l2'
+MODEL_PATH='lexlms/roberta-base-cased'
+DATASET_NAME='eurlex-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
 rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
     --dataset_name ${DATASET_NAME} \
+    --use_auth_key '' \
     --output_dir data/${DATASET_NAME}/${MODEL_PATH} \
     --do_train \
     --do_eval \
