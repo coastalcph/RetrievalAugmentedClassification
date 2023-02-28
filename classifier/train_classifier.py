@@ -247,7 +247,7 @@ def main():
     # Downloading and loading eurlex dataset from the hub.
     if training_args.do_train:
         train_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="train",
-                                     cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+                                     cache_dir=model_args.cache_dir, use_auth_token=model_args.use_auth_token)
 
         # Labels
         label_list = list(
@@ -257,7 +257,7 @@ def main():
 
     if training_args.do_eval:
         eval_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="validation",
-                                    cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+                                    cache_dir=model_args.cache_dir, use_auth_token=model_args.use_auth_token)
 
         if label_list is None:
             # Labels
@@ -268,7 +268,7 @@ def main():
 
     if training_args.do_predict:
         predict_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="test",
-                                       cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
+                                       cache_dir=model_args.cache_dir, use_auth_token=model_args.use_auth_token)
 
         if label_list is None:
             # Labels
