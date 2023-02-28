@@ -20,7 +20,7 @@ import torch
 from transformers.models.longformer.modeling_longformer import LongformerPreTrainedModel, \
     LongformerModel, LongformerClassificationHead, LongformerSequenceClassifierOutput
 from transformers.models.bert.modeling_bert import BertPreTrainedModel, SequenceClassifierOutput, BertModel
-from transformers.models.roberta.modeling_roberta import RobertaClassificationHead
+from transformers.models.roberta.modeling_roberta import RobertaClassificationHead, RobertaModel, RobertaPreTrainedModel
 from transformers.models.led.modeling_led import LEDDecoder, LEDConfig
 
 
@@ -229,6 +229,148 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
 
         if self.bert:
             encoder_outputs = self.bert(
+                input_ids,
+                attention_mask=attention_mask,
+                head_mask=None,
+                token_type_ids=None,
+                position_ids=None,
+                inputs_embeds=None,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+        else:
+            encoder_outputs = [torch.unsqueeze(input_embeds, dim=1)]
+
+        if self.ra_decoder:
+            sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
+            sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
+
+            # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
+            decoder_outputs = self.ra_decoder(
+                input_ids=None,
+                attention_mask=sequence_cls_mask,
+                encoder_hidden_states=decoder_input_ids,
+                encoder_attention_mask=decoder_attention_mask,
+                head_mask=None,
+                cross_attn_head_mask=None,
+                past_key_values=None,
+                inputs_embeds=sequence_cls_output,
+                use_cache=None,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+
+            sequence_output = decoder_outputs[0]
+        else:
+            sequence_output = encoder_outputs[0]
+
+        logits = self.classifier(sequence_output)
+
+        loss = None
+        if labels is not None:
+            if self.config.problem_type is None:
+                if self.num_labels == 1:
+                    self.config.problem_type = "regression"
+                elif self.num_labels > 1 and (labels.dtype == torch.long or labels.dtype == torch.int):
+                    self.config.problem_type = "single_label_classification"
+                else:
+                    self.config.problem_type = "multi_label_classification"
+
+            if self.config.problem_type == "regression":
+                loss_fct = MSELoss()
+                if self.num_labels == 1:
+                    loss = loss_fct(logits.squeeze(), labels.squeeze())
+                else:
+                    loss = loss_fct(logits, labels)
+            elif self.config.problem_type == "single_label_classification":
+                loss_fct = CrossEntropyLoss()
+                loss = loss_fct(logits.view(-1, self.num_labels), labels.view(-1))
+            elif self.config.problem_type == "multi_label_classification":
+                loss_fct = BCEWithLogitsLoss()
+                loss = loss_fct(logits, labels)
+
+        if not return_dict:
+            output = (logits,) + decoder_outputs[2:]
+            return ((loss,) + output) if loss is not None else output
+
+        return SequenceClassifierOutput(
+            loss=loss,
+            logits=logits,
+            hidden_states=decoder_outputs.hidden_states if self.ra_decoder else encoder_outputs.hidden_states,
+            attentions=decoder_outputs.cross_attentions if self.ra_decoder else encoder_outputs.attentions,
+        )
+
+class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
+    _keys_to_ignore_on_load_missing = [
+        r"ra_decoder", r"cls", r"classifier",
+    ]
+    _keys_to_ignore_on_load_unexpected = [
+        r"ra_decoder", r"cls",  r"classifier",
+    ]
+
+    def __init__(self, config):
+        super().__init__(config)
+
+        # document encoder
+        if not config.retrieval_augmentation or (config.retrieval_augmentation and config.encode_document):
+            self.roberta = RobertaModel(config, add_pooling_layer=False)
+        else:
+            self.roberta = None
+
+        # retrieval-augmented decoder
+        if config.retrieval_augmentation:
+            self.ra_config = LEDConfig()
+            self.ra_config.d_model = config.hidden_size
+            self.ra_config.decoder_ffn_dim = config.hidden_size
+            self.ra_config.decoder_attention_heads = config.dec_attention_heads
+            self.ra_config.decoder_layers = config.dec_layers
+            self.ra_decoder = LEDDecoder(self.ra_config)
+        else:
+            self.ra_decoder = None
+
+        # classifier
+        self.num_labels = config.num_labels
+        self.classifier = RobertaClassificationHead(config)
+
+        # Initialize weights and apply final processing
+        self.post_init()
+
+    def _merge_to_attention_mask(self, attention_mask: torch.Tensor, global_attention_mask: torch.Tensor):
+        # longformer self attention expects attention mask to have 0 (no attn), 1 (local attn), 2 (global attn)
+        # (global_attention_mask + 1) => 1 for local attention, 2 for global attention
+        # => final attention_mask => 0 for no attention, 1 for local attention 2 for global attention
+        if attention_mask is not None:
+            attention_mask = attention_mask * (global_attention_mask + 1)
+        else:
+            # simply use `global_attention_mask` as `attention_mask`
+            # if no `attention_mask` is given
+            attention_mask = global_attention_mask + 1
+        return attention_mask
+
+    def forward(
+            self,
+            input_ids: Optional[torch.Tensor] = None,
+            attention_mask: Optional[torch.Tensor] = None,
+            input_embeds: Optional[torch.Tensor] = None,
+            decoder_input_ids: Optional[torch.Tensor] = None,
+            decoder_attention_mask: Optional[torch.Tensor] = None,
+            labels: Optional[torch.Tensor] = None,
+            output_attentions: Optional[bool] = None,
+            output_hidden_states: Optional[bool] = None,
+            return_dict: Optional[bool] = None,
+    ) -> Union[Tuple, SequenceClassifierOutput]:
+        r"""
+                labels (`torch.LongTensor` of shape `(batch_size,)`, *optional*):
+                    Labels for computing the sequence classification/regression loss. Indices should be in `[0, ...,
+                    config.num_labels - 1]`. If `config.num_labels == 1` a regression loss is computed (Mean-Square loss), If
+                    `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
+                """
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
+
+        if self.roberta:
+            encoder_outputs = self.roberta(
                 input_ids,
                 attention_mask=attention_mask,
                 head_mask=None,

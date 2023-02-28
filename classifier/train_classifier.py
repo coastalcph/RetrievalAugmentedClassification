@@ -36,7 +36,7 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from data import AUTH_KEY, DATA_DIR
 from data_collator import DataCollatorForMultiLabelClassification
-from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification
+from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification, RARoBERTaForSequenceClassification
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.20.0")
@@ -310,6 +310,15 @@ def main():
 
     if "longformer" in model_args.model_name_or_path:
         model = RALongformerForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            use_auth_token=model_args.use_auth_token,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+        )
+    elif "roberta" in model_args.model_name_or_path:
+        model = RARoBERTaForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
