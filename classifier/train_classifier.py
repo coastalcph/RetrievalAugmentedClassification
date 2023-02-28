@@ -311,6 +311,7 @@ def main():
     )
 
     if "longformer" in model_args.model_name_or_path:
+        config.attention_window = [128] * config.num_hidden_layers
         model = RALongformerForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
