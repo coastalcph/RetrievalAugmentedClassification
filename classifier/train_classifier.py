@@ -291,6 +291,7 @@ def main():
         num_labels=num_labels,
         label2id={l: i for i, l in enumerate(labels_codes)},
         id2label={i: l for i, l in enumerate(labels_codes)},
+        use_auth_token=model_args.use_auth_token,
         finetuning_task=data_args.dataset_name,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
@@ -305,6 +306,7 @@ def main():
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
+        use_auth_token=model_args.use_auth_token,
         revision=model_args.model_revision,
     )
 
