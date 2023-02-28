@@ -14,8 +14,9 @@ MODEL_PATH='microsoft/BiomedNLP-PubMedBERT-base-uncased-abstract'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
+rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 
-for EMBEDDINGS_FOLDER in 'biomednlp-base-sentence-transformer-embeddings' 'biomednlp-base-labeled-sentence-transformer-embeddings'
+for EMBEDDINGS_FOLDER in 'bioasq-biomedbert-sentence-transformer-embeddings'
 do
   python classifier/train_classifier.py \
       --model_name_or_path ${MODEL_PATH} \

@@ -15,7 +15,7 @@ EMBEDDINGS_FOLDER='bioasq-biomedbert-base-embeddings'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
-
+rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 for NO_NEIGHBORS in 4 16 32
 do
   for DEC_LAYERS in 1 2 4

@@ -15,7 +15,7 @@ EMBEDDINGS_FOLDER='bioasq-biomedbert-base-embeddings'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
-
+rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
     --embeddings_path ${EMBEDDINGS_FOLDER} \
