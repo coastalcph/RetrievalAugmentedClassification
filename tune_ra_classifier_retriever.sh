@@ -22,9 +22,9 @@ do
       --model_name_or_path ${MODEL_PATH} \
       --embeddings_path ${EMBEDDINGS_FOLDER} \
       --retrieval_augmentation true \
-      --no_neighbors ${NO_NEIGHBORS} \
-      --dec_layers ${DEC_LAYERS} \
-      --dec_attention_heads ${DEC_AHS} \
+      --no_neighbors 32 \
+      --dec_layers 1 \
+      --dec_attention_heads 1 \
       --dataset_name ${DATASET_NAME} \
       --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/${EMBEDDINGS_FOLDER} \
       --do_train \
