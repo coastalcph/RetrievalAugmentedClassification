@@ -159,8 +159,8 @@ class ModelArguments:
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
-    use_auth_token: bool = field(
-        default=True,
+    use_auth_token: str = field(
+        default=None,
         metadata={
             "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
                     "with private models)."
