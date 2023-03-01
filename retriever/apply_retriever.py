@@ -16,7 +16,7 @@ def load_data(args):
     
     corpus = load_dataset(DATA_PATH, args.dataset_name, split="train", use_auth_token=AUTH_KEY)
 
-    sample_ids = random.sample(range(len(corpus)), k=min(10000, len(corpus)))
+    sample_ids = random.sample(range(len(corpus)), k=min(args.n_samples, len(corpus)))
     queries = {}
     queries['train'] = corpus.select(sample_ids)
     queries['validation'] = load_dataset(DATA_PATH, args.dataset_name, split="validation", use_auth_token=AUTH_KEY)
@@ -49,13 +49,10 @@ def write_embeddings(args, corpus, corpus_embeddings, name):
     for doc_id, embedding in zip(corpus['doc_id'], corpus_embeddings):
         h5py_file.create_dataset(doc_id, embedding.shape, data=embedding.cpu())
 
-def write_neighbors(args, split, datastore, query2neighbors):
+def write_neighbors(args, split, query2neighbors):
     if not os.path.exists(os.path.join(DATA_DIR, args.output_dir)):
         os.mkdir(os.path.join(DATA_DIR, args.output_dir))
-    if datastore == 'corpus':
-        output_path = os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))
-    else:
-        output_path = os.path.join(DATA_DIR, args.output_dir, '{}_nns-{}.json'.format(datastore, split))
+    output_path = os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
@@ -76,19 +73,25 @@ def main(args):
         embedder = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
     corpus, queries = load_data(args)
-    print('Embedding corpus...')
-    corpus_embeddings = embedder.encode(corpus['text'], convert_to_tensor=True)
-    write_embeddings(args, corpus, corpus_embeddings, 'corpus')
     
     query_embeddings = {}
     for split in ['train', 'validation', 'test']:
-        print('Processing {} split'.format(split))
+        print('Embedding {} split ...'.format(split))
         query_embeddings[split] = embedder.encode(queries[split]['text'], convert_to_tensor=True)
         write_embeddings(args, queries[split], query_embeddings[split], split)
-        query2corpus_neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], query_embeddings[split], split)
-        write_neighbors(args, split, 'corpus', query2corpus_neighbors)
-        query2train_neighbors = find_neighbors(embedder, queries['train'], query_embeddings['train'], queries[split], query_embeddings[split], split)
-        write_neighbors(args, split, 'train', query2train_neighbors)
+
+    if args.constrained_search:
+        corpus = queries['train']
+        corpus_embeddings = query_embeddings['train']
+    else:
+        print('Embedding corpus...')
+        corpus_embeddings = embedder.encode(corpus['text'], convert_to_tensor=True)
+    write_embeddings(args, corpus, corpus_embeddings, 'corpus')
+    
+    for split in ['train', 'validation', 'test']:
+        print('Mapping {} split'.format(split))
+        query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], query_embeddings[split], split)
+        write_neighbors(args, split, query2neighbors)
 
 
 if __name__ == '__main__':
@@ -97,10 +100,11 @@ if __name__ == '__main__':
     parser.add_argument("--output_dir", type=str, help="Where to store the cached embedding vectors and NN ids")
 
     parser.add_argument("--model_name", type=str, help="Directory where trained model is saved")
-
     parser.add_argument("--max_seq_length", type=int, default=512, help="Max length")
 
     parser.add_argument("--k", type=int, default=32, help="Number of NNs to save")
+    parser.add_argument("--n_samples", type=int, default=10000, help="Number of samples for training")
+    parser.add_argument("--constrained_search", default=False, action='store_true', help="Whether to constrain the NN search to the training samples only")
 
     args = parser.parse_args()
 
