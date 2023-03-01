@@ -23,10 +23,9 @@ do
   # TRAIN STANDARD CLASSIFIER
   python classifier/train_classifier.py \
       --model_name_or_path ${MODEL_PATH} \
-      --embeddings_path ${EMBEDDINGS_FOLDER} \
       --retrieval_augmentation false \
       --dataset_name ${DATASET_NAME} \
-      --output_dir data/${DATASET_NAME}/${MODEL_PATH}/${NO_SAMPLES} \
+      --output_dir data/${DATASET_NAME}/${MODEL_PATH}-${NO_SAMPLES} \
       --do_train \
       --do_eval \
       --do_pred \
@@ -55,7 +54,7 @@ do
   python retriever/apply_retriever.py \
       --dataset_name ${DATASET_NAME} \
       --output_dir data/${DATASET_NAME}-${NO_SAMPLES}-embeddings \
-      --model_name data/${DATASET_NAME}/${MODEL_PATH}/${NO_SAMPLES}
+      --model_name data/${DATASET_NAME}/${MODEL_PATH}-${NO_SAMPLES}
   # TRAIN RA CLASSIFIER
   python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
@@ -65,7 +64,7 @@ do
     --dec_layers 1 \
     --dec_attention_heads 1 \
     --dataset_name ${DATASET_NAME} \
-    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/${NO_SAMPLES} \
+    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra-${NO_SAMPLES} \
     --do_train \
     --do_eval \
     --do_pred \
