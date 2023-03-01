@@ -24,16 +24,11 @@ def load_data(args):
 
     return corpus, queries
 
-def find_neighbors(embedder, corpus, corpus_embeddings, queries, split):
+def find_neighbors(embedder, corpus, corpus_embeddings, queries, query_embeddings, split):
 
     query2neighbors = {}
     top_k = min(args.k + 1, len(corpus))
-    
-    h5py_file = h5py.File(os.path.join(DATA_DIR, args.output_dir, '{}.hdf5'.format(split)), 'w')
-    
-    for query in queries:
-        query_embedding = embedder.encode(query['text'], convert_to_tensor=True)
-        h5py_file.create_dataset(query['doc_id'], query_embedding.shape, data=query_embedding.cpu())
+    for query, query_embedding in zip(queries, query_embeddings):
         cos_scores = util.cos_sim(query_embedding, corpus_embeddings)[0]
         top_results = torch.topk(cos_scores, k=top_k)
         
@@ -47,21 +42,24 @@ def find_neighbors(embedder, corpus, corpus_embeddings, queries, split):
 
     return query2neighbors
 
-def write_embeddings(args, corpus, corpus_embeddings):
+def write_embeddings(args, corpus, corpus_embeddings, name):
     if not os.path.exists(os.path.join(DATA_DIR, args.output_dir)):
         os.mkdir(os.path.join(DATA_DIR, args.output_dir))
-    h5py_file = h5py.File(os.path.join(DATA_DIR, args.output_dir, 'corpus.hdf5'), 'w')
+    h5py_file = h5py.File(os.path.join(DATA_DIR, args.output_dir, '{}.hdf5'.format(name)), 'w')
     for doc_id, embedding in zip(corpus['doc_id'], corpus_embeddings):
         h5py_file.create_dataset(doc_id, embedding.shape, data=embedding.cpu())
 
-def write_neighbors(args, split, query2neighbors):
+def write_neighbors(args, split, datastore, query2neighbors):
     if not os.path.exists(os.path.join(DATA_DIR, args.output_dir)):
         os.mkdir(os.path.join(DATA_DIR, args.output_dir))
-    output_path = os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))
+    if datastore == 'corpus':
+        output_path = os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))
+    else:
+        output_path = os.path.join(DATA_DIR, args.output_dir, '{}_nns-{}.json'.format(datastore, split))
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
-    if 'sentence' in args.model_name:
+    if 'sentence' in args.model_name or 'setfit' in args.model_name:
         embedder = SentenceTransformer(args.model_name)
     else:
         from torch import nn
@@ -80,12 +78,17 @@ def main(args):
     corpus, queries = load_data(args)
     print('Embedding corpus...')
     corpus_embeddings = embedder.encode(corpus['text'], convert_to_tensor=True)
-    write_embeddings(args, corpus, corpus_embeddings)
-
+    write_embeddings(args, corpus, corpus_embeddings, 'corpus')
+    
+    query_embeddings = {}
     for split in ['train', 'validation', 'test']:
         print('Processing {} split'.format(split))
-        query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], split)
-        write_neighbors(args, split, query2neighbors)
+        query_embeddings[split] = embedder.encode(queries[split]['text'], convert_to_tensor=True)
+        write_embeddings(args, queries[split], query_embeddings[split], split)
+        query2corpus_neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], query_embeddings[split], split)
+        write_neighbors(args, split, 'corpus', query2corpus_neighbors)
+        query2train_neighbors = find_neighbors(embedder, queries['train'], query_embeddings['train'], queries[split], query_embeddings[split], split)
+        write_neighbors(args, split, 'train', query2train_neighbors)
 
 
 if __name__ == '__main__':
