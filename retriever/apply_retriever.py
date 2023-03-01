@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     parser.add_argument("--k", type=int, default=32, help="Number of NNs to save")
     parser.add_argument("--n_samples", type=int, default=10000, help="Number of samples for training")
-    parser.add_argument("--constrained_search", type=bool, default=False, action='store_true', help="Whether to constrain the NN search to the training samples only")
+    parser.add_argument("--constrained_search", default=False, action='store_true', help="Whether to constrain the NN search to the training samples only")
 
     args = parser.parse_args()
 
