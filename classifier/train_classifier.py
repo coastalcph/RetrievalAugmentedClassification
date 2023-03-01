@@ -36,7 +36,7 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from data import AUTH_KEY, DATA_DIR
 from data_collator import DataCollatorForMultiLabelClassification
-from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification
+from ra_classifier import RABERTForSequenceClassification, RALongformerForSequenceClassification, RARoBERTaForSequenceClassification
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.20.0")
@@ -159,8 +159,8 @@ class ModelArguments:
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
-    use_auth_token: bool = field(
-        default=True,
+    use_auth_token: str = field(
+        default=None,
         metadata={
             "help": "Will use the token generated when running `transformers-cli login` (necessary to use this script "
                     "with private models)."
@@ -291,6 +291,7 @@ def main():
         num_labels=num_labels,
         label2id={l: i for i, l in enumerate(labels_codes)},
         id2label={i: l for i, l in enumerate(labels_codes)},
+        use_auth_token=model_args.use_auth_token,
         finetuning_task=data_args.dataset_name,
         cache_dir=model_args.cache_dir,
         revision=model_args.model_revision,
@@ -305,14 +306,26 @@ def main():
         model_args.tokenizer_name if model_args.tokenizer_name else model_args.model_name_or_path,
         cache_dir=model_args.cache_dir,
         use_fast=model_args.use_fast_tokenizer,
+        use_auth_token=model_args.use_auth_token,
         revision=model_args.model_revision,
     )
 
     if "longformer" in model_args.model_name_or_path:
+        config.attention_window = [128] * config.num_hidden_layers
         model = RALongformerForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
+            use_auth_token=model_args.use_auth_token,
+            cache_dir=model_args.cache_dir,
+            revision=model_args.model_revision,
+        )
+    elif "roberta" in model_args.model_name_or_path:
+        model = RARoBERTaForSequenceClassification.from_pretrained(
+            model_args.model_name_or_path,
+            from_tf=bool(".ckpt" in model_args.model_name_or_path),
+            config=config,
+            use_auth_token=model_args.use_auth_token,
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
@@ -321,6 +334,7 @@ def main():
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
             config=config,
+            use_auth_token=model_args.use_auth_token,
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )

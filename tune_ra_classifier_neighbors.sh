@@ -15,7 +15,7 @@ EMBEDDINGS_FOLDER='bioasq-biomedbert-base-embeddings'
 DATASET_NAME='bioasq-l2'
 export PYTHONPATH=.
 export TOKENIZERS_PARALLELISM=false
-
+rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 for NO_NEIGHBORS in 4 16 32
 do
   for DEC_LAYERS in 1 2 4
@@ -30,7 +30,7 @@ do
           --dec_layers ${DEC_LAYERS} \
           --dec_attention_heads ${DEC_AHS} \
           --dataset_name ${DATASET_NAME} \
-          --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/nn-${NO_NEIGHBORS}-dl-${DEC_LAYERS}-${DEC_AHS} \
+          --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra/nn-${NO_NEIGHBORS}-dl-${DEC_LAYERS}-ah-${DEC_AHS} \
           --do_train \
           --do_eval \
           --do_pred \
@@ -55,4 +55,5 @@ do
           --lr_scheduler_type cosine
     done
   done
+  rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
 done
