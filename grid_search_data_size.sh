@@ -20,6 +20,7 @@ for NO_SAMPLES in 2500 5000 10000 20000 40000 80000
 do
   # DELETE CACHED DATASET
   rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
+
   # TRAIN STANDARD CLASSIFIER
   python classifier/train_classifier.py \
       --model_name_or_path ${MODEL_PATH} \
@@ -48,23 +49,27 @@ do
       --fp16 \
       --fp16_full_eval \
       --lr_scheduler_type cosine
+
   # DELETE CACHED DATASET
   rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NAME}
+
   # CREATE DATASTORE
   python retriever/apply_retriever.py \
       --dataset_name ${DATASET_NAME} \
-      --output_dir data/${DATASET_NAME}-${NO_SAMPLES}-embeddings \
-      --model_name data/${DATASET_NAME}/${MODEL_PATH}-${NO_SAMPLES}
+      --output_dir data/${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
+      --model_name data/${DATASET_NAME}/${MODEL_PATH}-${NO_SAMPLES} \
+      --constrained_search
+
   # TRAIN RA CLASSIFIER
   python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
-    --embeddings_path data/${DATASET_NAME}-${NO_SAMPLES}-embeddings \
+    --embeddings_path data/${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
     --retrieval_augmentation true \
     --no_neighbors 32 \
     --dec_layers 1 \
     --dec_attention_heads 1 \
     --dataset_name ${DATASET_NAME} \
-    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra-${NO_SAMPLES} \
+    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra-constrained-${NO_SAMPLES} \
     --do_train \
     --do_eval \
     --do_pred \
