@@ -3,7 +3,7 @@
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:a100:1
 #SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-ra-data.txt
-#SBATCH --time=12:00:00
+#SBATCH --time=24:00:00
 
 module load miniconda/4.12.0
 conda activate kiddothe2b

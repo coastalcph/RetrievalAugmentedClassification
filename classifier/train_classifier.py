@@ -75,6 +75,12 @@ class DataTrainingArguments:
             "help": "The path where the neighbor documents embeddings are saved."
         },
     )
+    predictions_path: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": "The path where the predictions are saved."
+        },
+    )
     max_seq_length: Optional[int] = field(
         default=2048,
         metadata={
@@ -115,6 +121,8 @@ class DataTrainingArguments:
     )
     server_ip: Optional[str] = field(default=None, metadata={"help": "For distant debugging."})
     server_port: Optional[str] = field(default=None, metadata={"help": "For distant debugging."})
+    do_train_eval: Optional[bool] = field(default=False, metadata={"help": "Evaluate on training set."})
+    bootstrap_dataset: Optional[bool] = field(default=False, metadata={"help": "Use predictions on training set."})
 
 
 @dataclass
@@ -168,7 +176,7 @@ class ModelArguments:
     )
 
 
-def update_dataset(dataset, datastore, embeddings_path, no_neighbors=16):
+def update_dataset_neighbors(dataset, datastore, embeddings_path, no_neighbors=16):
     # Augment with neighbors
     with open(embeddings_path) as file:
         neighbors = json.load(file)
@@ -180,6 +188,19 @@ def update_dataset(dataset, datastore, embeddings_path, no_neighbors=16):
         return example
 
     return dataset.map(add_neighbors)
+
+
+def update_dataset_bootstrap(dataset, predictions_path, document_ids):
+    # Augment with neighbors
+    with open(predictions_path) as file:
+        predictions = json.load(file)
+
+    def relabel_docs(example):
+        if example['doc_id'] not in document_ids:
+            example["labels"] = predictions[example['doc_id']]
+        return example
+
+    return dataset.map(relabel_docs)
 
 
 def main():
@@ -245,7 +266,7 @@ def main():
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
     # Downloading and loading eurlex dataset from the hub.
-    if training_args.do_train:
+    if training_args.do_train or data_args.do_train_eval:
         train_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="train",
                                      cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
 
@@ -310,7 +331,7 @@ def main():
         revision=model_args.model_revision,
     )
 
-    if "longformer" in model_args.model_name_or_path:
+    if config.model_type == 'longformer':
         config.attention_window = [128] * config.num_hidden_layers
         model = RALongformerForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
@@ -320,7 +341,7 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
-    elif "roberta" in model_args.model_name_or_path:
+    elif config.model_type == 'roberta':
         model = RARoBERTaForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -329,7 +350,7 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
-    else:
+    elif config.model_type == 'bert':
         model = RABERTForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
             from_tf=bool(".ckpt" in model_args.model_name_or_path),
@@ -338,6 +359,8 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
+    else:
+        raise NotImplementedError(f'Models of type {config.model_type} are not supported!!!')
 
     # Preprocessing the datasets
     # Padding strategy
@@ -385,15 +408,24 @@ def main():
 
         return batch
 
-    if training_args.do_train:
+    if training_args.do_train or data_args.do_train_eval:
         if data_args.max_train_samples is not None:
             random.seed(42)
             sample_ids = random.sample(range(len(train_dataset)), k=10000)[:data_args.max_train_samples]
             train_dataset = train_dataset.select(sample_ids)
         if model_args.retrieval_augmentation:
-            train_dataset = update_dataset(train_dataset, datastore,
-                                           embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
-                                           no_neighbors=model_args.no_neighbors)
+            train_dataset = update_dataset_neighbors(train_dataset, datastore,
+                                                     embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
+                                                     no_neighbors=model_args.no_neighbors)
+        if data_args.bootstrap_dataset:
+            random.seed(42)
+            sample_ids = random.sample(range(len(train_dataset)), k=10000)[:data_args.max_train_samples]
+            train_subset = train_dataset.select(sample_ids)
+            doc_ids = train_subset['doc_id']
+            train_dataset = update_dataset_bootstrap(train_dataset,
+                                                     predictions_path=os.path.join(DATA_DIR, data_args.predictions_path, 'train_predictions.json'),
+                                                     document_ids=doc_ids
+                                                     )
         with training_args.main_process_first(desc="train dataset map pre-processing"):
             train_dataset = train_dataset.map(
                 preprocess_function,
@@ -410,9 +442,9 @@ def main():
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
         if model_args.retrieval_augmentation:
-            eval_dataset = update_dataset(eval_dataset, datastore,
-                                          embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'),
-                                          no_neighbors=model_args.no_neighbors)
+            eval_dataset = update_dataset_neighbors(eval_dataset, datastore,
+                                                    embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'),
+                                                    no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="validation dataset map pre-processing"):
             eval_dataset = eval_dataset.map(
                 preprocess_function,
@@ -426,9 +458,9 @@ def main():
         if data_args.max_predict_samples is not None:
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
         if model_args.retrieval_augmentation:
-            predict_dataset = update_dataset(predict_dataset, datastore,
-                                             embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'),
-                                             no_neighbors=model_args.no_neighbors)
+            predict_dataset = update_dataset_neighbors(predict_dataset, datastore,
+                                                       embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'),
+                                                       no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
             predict_dataset = predict_dataset.map(
                 preprocess_function,
@@ -477,6 +509,19 @@ def main():
         trainer.log_metrics("train", metrics)
         trainer.save_metrics("train", metrics)
         trainer.save_state()
+
+    if data_args.do_train_eval:
+        logger.info("*** Predict training ***")
+        predictions, labels, _ = trainer.predict(train_dataset, metric_key_prefix="predict")
+        hard_predictions = (expit(predictions) > 0.5).astype('int32')
+
+        output_predict_file = os.path.join(DATA_DIR, training_args.output_dir, "train_predictions.json")
+        predictions = {}
+        if trainer.is_world_process_zero():
+            for sample, hard_p in zip(train_dataset, hard_predictions):
+                predictions[sample['doc_id']] = [idx for idx in label_list if hard_p[idx] == 1]
+            with open(output_predict_file, "w") as writer:
+                json.dump(predictions, writer)
 
     # Evaluation
     if training_args.do_eval:
