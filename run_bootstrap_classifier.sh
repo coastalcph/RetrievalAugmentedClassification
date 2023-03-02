@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=bioasq-ra-pubmedbert-base
+#SBATCH --job-name=bioasq-pubmedbert-base-bootstrap
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:a100:1
-#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-ra-pubmedbert-base.txt
+#SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-base-bootstrap.txt
 #SBATCH --time=8:00:00
 
 module load miniconda/4.12.0
