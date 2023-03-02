@@ -56,14 +56,14 @@ do
   # CREATE DATASTORE
   python retriever/apply_retriever.py \
       --dataset_name ${DATASET_NAME} \
-      --output_dir data/${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
+      --output_dir ${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
       --model_name data/${DATASET_NAME}/${MODEL_PATH}-${NO_SAMPLES} \
       --constrained_search
 
   # TRAIN RA CLASSIFIER
   python classifier/train_classifier.py \
     --model_name_or_path ${MODEL_PATH} \
-    --embeddings_path data/${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
+    --embeddings_path ${DATASET_NAME}-${NO_SAMPLES}-constrained-embeddings \
     --retrieval_augmentation true \
     --no_neighbors 32 \
     --dec_layers 1 \
