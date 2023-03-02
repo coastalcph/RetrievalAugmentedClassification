@@ -23,6 +23,7 @@ rm -rf ../.cache/huggingface/datasets/kiddothe2b___multilabel_bench/${DATASET_NA
 python classifier/train_classifier.py \
     --model_name_or_path data/${DATASET_NAME}/${MODEL_PATH} \
     --retrieval_augmentation false \
+    --bootstrap_dataset false \
     --dataset_name ${DATASET_NAME} \
     --output_dir ${DATASET_NAME}/${PREDICTIONS_FOLDER} \
     --do_train false \

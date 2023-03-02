@@ -517,6 +517,8 @@ def main():
 
         output_predict_file = os.path.join(DATA_DIR, training_args.output_dir, "train_predictions.json")
         predictions = {}
+        if not os.path.exists(os.path.join(DATA_DIR, training_args.output_dir)):
+            os.mkdir(os.path.join(DATA_DIR, training_args.output_dir))
         if trainer.is_world_process_zero():
             for sample, hard_p in zip(train_dataset, hard_predictions):
                 predictions[sample['doc_id']] = [idx for idx in label_list if hard_p[idx] == 1]
