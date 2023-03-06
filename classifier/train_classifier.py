@@ -411,7 +411,7 @@ def main():
     if training_args.do_train or data_args.do_train_eval:
         if data_args.max_train_samples is not None:
             random.seed(42)
-            sample_ids = random.sample(range(len(train_dataset)), k=10000)[:data_args.max_train_samples]
+            sample_ids = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
             train_dataset = train_dataset.select(sample_ids)
         if model_args.retrieval_augmentation:
             train_dataset = update_dataset_neighbors(train_dataset, datastore,
@@ -419,7 +419,7 @@ def main():
                                                      no_neighbors=model_args.no_neighbors)
         if data_args.bootstrap_dataset:
             random.seed(42)
-            sample_ids = random.sample(range(len(train_dataset)), k=10000)[:data_args.max_train_samples]
+            sample_ids = random.sample(range(len(train_dataset)), k=data_args.max_train_samples)
             train_subset = train_dataset.select(sample_ids)
             doc_ids = train_subset['doc_id']
             train_dataset = update_dataset_bootstrap(train_dataset,
