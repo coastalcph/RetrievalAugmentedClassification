@@ -154,9 +154,9 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
         return LongformerSequenceClassifierOutput(
             loss=loss,
             logits=logits,
-            hidden_states=decoder_outputs.hidden_states,
-            attentions=decoder_outputs.attentions,
-            global_attentions=decoder_outputs.global_attentions,
+            hidden_states=decoder_outputs.hidden_states if self.ra_decoder else encoder_outputs.hidden_states,
+            attentions=decoder_outputs.cross_attentions if self.ra_decoder else encoder_outputs.attentions,
+            global_attentions=None,
         )
 
 
