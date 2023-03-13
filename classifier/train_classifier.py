@@ -155,6 +155,9 @@ class ModelArguments:
     no_neighbors: Optional[int] = field(
         default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
+    augment_with_labels: Optional[bool] = field(
+            default=False, metadata = {"help": "Whether to include the labels of retrieved neighbors"}
+    )
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
@@ -176,18 +179,18 @@ class ModelArguments:
     )
 
 
-def update_dataset_neighbors(dataset, datastore, embeddings_path, no_neighbors=16):
+def update_dataset_neighbors(dataset, datastore, doc2labels, embeddings_path, no_neighbors=16):
     # Augment with neighbors
-    with open(embeddings_path) as file:
-        neighbors = json.load(file)
+    with open(embeddings_path) as filename:
+        neighbors = json.load(filename)
 
     def add_neighbors(example):
         doc_neighbors = [neighbor['doc_id'] for neighbor in neighbors[example['doc_id']][:no_neighbors]]
         example["neighbor_embeddings"] = [datastore[doc_id][:] for doc_id in doc_neighbors]
-        # example["doc_embedding"] = datastore[example['doc_id']][:]
+        example["neighbor_labels"] = [doc2labels[doc_id] for doc_id in doc_neighbors]
         return example
-
-    return dataset.map(add_neighbors)
+    
+    return dataset.map(add_neighbors, load_from_cache_file=False)
 
 
 def update_dataset_bootstrap(dataset, predictions_path, document_ids):
@@ -319,6 +322,7 @@ def main():
     )
     # add retrieval_augmentation param in config
     config.retrieval_augmentation = model_args.retrieval_augmentation
+    config.augment_with_labels = model_args.augment_with_labels
     config.encode_document = model_args.encode_document
     config.dec_layers = model_args.dec_layers
     config.dec_attention_heads = model_args.dec_attention_heads
@@ -398,6 +402,12 @@ def main():
 
         if model_args.retrieval_augmentation:
             batch["decoder_input_ids"] = examples["neighbor_embeddings"]
+            if model_args.augment_with_labels:
+                batch_neighbor_labels = []
+                for neighbor_labels in examples["neighbor_labels"]:
+                    batch_neighbor_labels.append([[1.0 if label in labels else 0.0 for label in label_list] for labels in neighbor_labels])
+                batch["dec_labs"] = batch_neighbor_labels
+            
             batch["decoder_attention_mask"] = np.ones((len(batch["decoder_input_ids"]), model_args.no_neighbors), dtype=int)
 
         if not model_args.encode_document:
@@ -407,14 +417,16 @@ def main():
         batch['labels'] = batch['label_ids']
 
         return batch
-
+    
     if training_args.do_train or data_args.do_train_eval:
         if data_args.max_train_samples is not None:
+            doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
             random.seed(42)
             sample_ids = random.sample(range(len(train_dataset)), k=min(data_args.max_train_samples, len(train_dataset)))
             train_dataset = train_dataset.select(sample_ids)
+        
         if model_args.retrieval_augmentation:
-            train_dataset = update_dataset_neighbors(train_dataset, datastore,
+            train_dataset = update_dataset_neighbors(train_dataset, datastore, doc2labels,
                                                      embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
                                                      no_neighbors=model_args.no_neighbors)
         if data_args.bootstrap_dataset:
@@ -430,7 +442,7 @@ def main():
             train_dataset = train_dataset.map(
                 preprocess_function,
                 batched=True,
-                remove_columns=['labels', 'text'],
+                remove_columns=['labels', 'text', 'neighbor_embeddings'],
                 load_from_cache_file=False,
                 desc="Running tokenizer on train dataset",
             )
@@ -442,7 +454,7 @@ def main():
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
         if model_args.retrieval_augmentation:
-            eval_dataset = update_dataset_neighbors(eval_dataset, datastore,
+            eval_dataset = update_dataset_neighbors(eval_dataset, datastore, doc2labels,
                                                     embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'),
                                                     no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="validation dataset map pre-processing"):
@@ -458,7 +470,7 @@ def main():
         if data_args.max_predict_samples is not None:
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
         if model_args.retrieval_augmentation:
-            predict_dataset = update_dataset_neighbors(predict_dataset, datastore,
+            predict_dataset = update_dataset_neighbors(predict_dataset, datastore, doc2labels,
                                                        embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'),
                                                        no_neighbors=model_args.no_neighbors)
         with training_args.main_process_first(desc="prediction dataset map pre-processing"):
