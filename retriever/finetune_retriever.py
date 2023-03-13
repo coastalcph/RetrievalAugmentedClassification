@@ -8,7 +8,6 @@ from datasets import load_dataset
 from sentence_transformers.losses import CosineSimilarityLoss
 
 from setfit import SetFitModel, SetFitTrainer, sample_dataset
-
 from data import AUTH_KEY, DATA_PATH
 
 def load_data(args):
@@ -52,7 +51,7 @@ def load_model(args):
     model = SetFitModel.from_pretrained(
         args.model_name,
         use_differentiable_head=True,
-        multi_target_strategy='multi-output'
+        multi_target_strategy='one-vs-rest',#'multi-output'
         #head_params={"out_features": num_classes},
     )
     return model
@@ -60,6 +59,7 @@ def load_model(args):
 def main(args):
 
     train_dataset, eval_dataset = load_data(args)
+    #import pdb; pdb.set_trace()
     model = load_model(args)
     
     # Create trainer
@@ -68,7 +68,6 @@ def main(args):
     train_dataset=train_dataset,
     eval_dataset=eval_dataset,
     loss_class=CosineSimilarityLoss,
-    metric="accuracy",
     batch_size=args.batch_size,
     num_iterations=20, # The number of text pairs to generate for contrastive learning
     num_epochs=args.num_epochs, # The number of epochs to use for contrastive learning
@@ -78,7 +77,7 @@ def main(args):
     # Train and evaluate
     trainer.freeze() # Freeze the head
     trainer.train(
-            learning_rate=args.learning_rate) # Train only the body
+            )#learning_rate=args.learning_rate) # Train only the body
     trainer.model.save_pretrained(os.path.join(args.experiments_dir, args.experiment_name))
     # Download from Hub and run inference
     #model = SetFitModel.from_pretrained("lewtun/my-awesome-setfit-model")

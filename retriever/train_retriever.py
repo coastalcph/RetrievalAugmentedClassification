@@ -24,10 +24,15 @@ from sentence_transformers import LoggingHandler, SentenceTransformer, InputExam
 
 def load_model(args):
     # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
+ 
     if args.max_seq_length <= 512:
-        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+        
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length,
+                model_args={'use_auth_token': args.use_auth_token},
+                tokenizer_args={'use_auth_token': args.use_auth_token})
     else:
-        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length, model_args={'attention_window': [128] * 12})
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length, 
+                model_args={'attention_window': [128] * 12, 'use_auth_token': args.use_auth_token})
 
     # Apply mean pooling to get one fixed sized sentence vector
     pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='cls')
@@ -84,6 +89,8 @@ if __name__ == '__main__':
     parser.add_argument("--learning_rate", type=float, default=5e-5, help="Learning rate")
     parser.add_argument("--num_epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--max_seq_length", type=int, default=4096, help="Maximum sequence length")
+ 
+    parser.add_argument("--use_auth_token", type=str, default=None, help="HF auth token")
     
     args = parser.parse_args()
 

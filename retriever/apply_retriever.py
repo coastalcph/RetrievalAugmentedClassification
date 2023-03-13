@@ -15,7 +15,7 @@ from data import AUTH_KEY, DATA_DIR, DATA_PATH
 def load_data(args):
     
     corpus = load_dataset(DATA_PATH, args.dataset_name, split="train", use_auth_token=AUTH_KEY)
-
+    
     sample_ids = random.sample(range(len(corpus)), k=min(args.n_samples, len(corpus)))
     queries = {}
     queries['train'] = corpus.select(sample_ids)
