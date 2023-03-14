@@ -37,8 +37,8 @@ python classifier/train_classifier.py \
     --save_strategy epoch \
     --save_total_limit 5 \
     --learning_rate 3e-5 \
-    --per_device_train_batch_size 32 \
-    --per_device_eval_batch_size 32 \
+    --per_device_train_batch_size 16 \
+    --per_device_eval_batch_size 16 \
     --seed 42 \
     --num_train_epochs 20 \
     --max_train_samples 10000 \
@@ -46,4 +46,6 @@ python classifier/train_classifier.py \
     --weight_decay 0.01 \
     --fp16 \
     --fp16_full_eval \
-    --lr_scheduler_type cosine
+    --lr_scheduler_type cosine \
+    --gradient_accumulation_steps 2 \
+    --eval_accumulation_steps 2
