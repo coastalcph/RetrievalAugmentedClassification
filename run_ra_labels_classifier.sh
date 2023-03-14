@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=bioasq-ra-pubmedbert-base
+#SBATCH --job-name=bioasq-ra-labels-pubmedbert-base
 #SBATCH --cpus-per-task=8 --mem=8000M
 #SBATCH -p gpu --gres=gpu:a100:1
 #SBATCH --output=/home/rwg642/RetrievalAugmentedClassification/bioasq-ra-labels-pubmedbert-base.txt
@@ -24,7 +24,7 @@ python classifier/train_classifier.py \
     --encode_document true \
     --no_neighbors 32 \
     --dataset_name ${DATASET_NAME} \
-    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra \
+    --output_dir data/${DATASET_NAME}/${MODEL_PATH}-ra-labels \
     --do_train \
     --do_eval \
     --do_pred \
