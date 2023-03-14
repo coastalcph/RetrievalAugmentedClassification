@@ -442,7 +442,7 @@ def main():
             train_dataset = train_dataset.map(
                 preprocess_function,
                 batched=True,
-                remove_columns=['labels', 'text', 'neighbor_embeddings'],
+                remove_columns=['labels', 'text'],
                 load_from_cache_file=False,
                 desc="Running tokenizer on train dataset",
             )
