@@ -156,7 +156,7 @@ class ModelArguments:
         default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
     augment_with_labels: Optional[bool] = field(
-            default=False, metadata = {"help": "Whether to include the labels of retrieved neighbors"}
+            default=False, metadata={"help": "Whether to include the labels of retrieved neighbors"}
     )
     cache_dir: Optional[str] = field(
         default=None,
