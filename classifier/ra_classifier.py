@@ -75,7 +75,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
             attention_mask: Optional[torch.Tensor] = None,
             global_attention_mask: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
-            dec_labs: Optional[torch.Tensor] = None,
+            decoder_manyhot_ids: Optional[torch.Tensor] = None,
             decoder_attention_mask: Optional[torch.Tensor] = None,
             labels: Optional[torch.Tensor] = None,
             output_attentions: Optional[bool] = None,
@@ -110,8 +110,8 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
         sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
         sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-        if dec_labs is not None:
-            decoder_input_ids = torch.cat([decoder_input_ids, dec_labs], dim=-1)
+        if decoder_manyhot_ids is not None:
+            decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
             decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
 
         # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
@@ -226,7 +226,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             attention_mask: Optional[torch.Tensor] = None,
             input_embeds: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
-            dec_labs: Optional[torch.Tensor] = None,
+            decoder_manyhot_ids: Optional[torch.Tensor] = None,
             decoder_attention_mask: Optional[torch.Tensor] = None,
             labels: Optional[torch.Tensor] = None,
             output_attentions: Optional[bool] = None,
@@ -260,8 +260,8 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-            if dec_labs is not None:
-                decoder_input_ids = torch.cat([decoder_input_ids, dec_labs], dim=-1)
+            if decoder_manyhot_ids is not None:
+                decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
                 decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
 
             # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
@@ -377,7 +377,7 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
             attention_mask: Optional[torch.Tensor] = None,
             input_embeds: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
-            dec_labs: Optional[torch.Tensor] = None,
+            decoder_manyhot_ids: Optional[torch.Tensor] = None,
             decoder_attention_mask: Optional[torch.Tensor] = None,
             labels: Optional[torch.Tensor] = None,
             output_attentions: Optional[bool] = None,
@@ -411,8 +411,8 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-            if dec_labs is not None:
-                decoder_input_ids = torch.cat([decoder_input_ids, dec_labs], dim=-1)
+            if decoder_manyhot_ids is not None:
+                decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
                 decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
 
             # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)

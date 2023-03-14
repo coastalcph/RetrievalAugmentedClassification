@@ -406,7 +406,7 @@ def main():
                 batch_neighbor_labels = []
                 for neighbor_labels in examples["neighbor_labels"]:
                     batch_neighbor_labels.append([[1.0 if label in labels else 0.0 for label in label_list] for labels in neighbor_labels])
-                batch["dec_labs"] = batch_neighbor_labels
+                batch["decoder_manyhot_ids"] = batch_neighbor_labels
             
             batch["decoder_attention_mask"] = np.ones((len(batch["decoder_input_ids"]), model_args.no_neighbors), dtype=int)
 
