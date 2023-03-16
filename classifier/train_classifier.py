@@ -155,6 +155,9 @@ class ModelArguments:
     no_neighbors: Optional[int] = field(
         default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
+    augment_with_documents: Optional[bool] = field(
+            default=False, metadata={"help": "Whether to include the document embeddings of retrieved neighbors"}
+    )    
     augment_with_labels: Optional[bool] = field(
             default=False, metadata={"help": "Whether to include the labels of retrieved neighbors"}
     )
@@ -321,7 +324,10 @@ def main():
         revision=model_args.model_revision,
     )
     # add retrieval_augmentation param in config
+    if model_args.retrieval_augmentation:
+        assert model_args.augment_with_documents or model_args.augment_with_labels
     config.retrieval_augmentation = model_args.retrieval_augmentation
+    config.augment_with_documents = model_args.augment_with_documents
     config.augment_with_labels = model_args.augment_with_labels
     config.encode_document = model_args.encode_document
     config.dec_layers = model_args.dec_layers
@@ -401,14 +407,15 @@ def main():
             batch["global_attention_mask"] = list(batch["global_attention_mask"])
 
         if model_args.retrieval_augmentation:
-            batch["decoder_input_ids"] = examples["neighbor_embeddings"]
+            if model_args.augment_with_documents:
+                batch["decoder_input_ids"] = examples["neighbor_embeddings"]
             if model_args.augment_with_labels:
                 batch_neighbor_labels = []
                 for neighbor_labels in examples["neighbor_labels"]:
                     batch_neighbor_labels.append([[1.0 if label in labels else 0.0 for label in label_list] for labels in neighbor_labels])
                 batch["decoder_manyhot_ids"] = batch_neighbor_labels
             
-            batch["decoder_attention_mask"] = np.ones((len(batch["decoder_input_ids"]), model_args.no_neighbors), dtype=int)
+            batch["decoder_attention_mask"] = np.ones((len(examples["neighbor_embeddings"]), model_args.no_neighbors), dtype=int)
 
         if not model_args.encode_document:
             batch["input_embeds"] = examples['doc_embedding']
