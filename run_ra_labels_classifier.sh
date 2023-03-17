@@ -21,6 +21,7 @@ python classifier/train_classifier.py \
     --embeddings_path ${EMBEDDINGS_FOLDER} \
     --retrieval_augmentation true \
     --augment_with_labels true \
+    --augment_with_documents false \
     --encode_document true \
     --no_neighbors 32 \
     --dataset_name ${DATASET_NAME} \
