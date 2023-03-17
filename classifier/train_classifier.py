@@ -272,7 +272,7 @@ def main():
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
     # download the dataset.
     # Downloading and loading eurlex dataset from the hub.
-    if training_args.do_train or data_args.do_train_eval:
+    if training_args.do_train or training_args.do_predict or data_args.do_train_eval:
         train_dataset = load_dataset('kiddothe2b/multilabel_bench', data_args.dataset_name, split="train",
                                      cache_dir=model_args.cache_dir, use_auth_token=AUTH_KEY)
 
@@ -424,14 +424,14 @@ def main():
         batch['labels'] = batch['label_ids']
 
         return batch
-    
+
+    doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
+    if data_args.max_train_samples is not None:
+        random.seed(42)
+        sample_ids = random.sample(range(len(train_dataset)), k=min(data_args.max_train_samples, len(train_dataset)))
+        train_dataset = train_dataset.select(sample_ids)
+
     if training_args.do_train or data_args.do_train_eval:
-        if data_args.max_train_samples is not None:
-            doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
-            random.seed(42)
-            sample_ids = random.sample(range(len(train_dataset)), k=min(data_args.max_train_samples, len(train_dataset)))
-            train_dataset = train_dataset.select(sample_ids)
-        
         if model_args.retrieval_augmentation:
             train_dataset = update_dataset_neighbors(train_dataset, datastore, doc2labels,
                                                      embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
@@ -575,6 +575,37 @@ def main():
             cls_report = classification_report(y_true=labels, y_pred=hard_predictions,
                                                target_names=list(config.label2id.keys()),
                                                zero_division=0)
+            cls_report_dict = classification_report(y_true=labels, y_pred=hard_predictions,
+                                               target_names=list(config.label2id.keys()),
+                                               zero_division=0, output_dict=True)
+
+            # compute binned metrics
+            thresholds = [10, 100, 500, 1000, 10000]
+            train_labels = sum(train_dataset['labels'] ,[])
+            bin_data = {threshold: [] for threshold in thresholds}
+            for label_id, label_name in zip(label_list, labels_codes):
+                count = train_labels.count(label_id)
+                label_entry = cls_report_dict[label_name]
+                for threshold in thresholds:
+                    if count <= threshold:
+                        bin_data[threshold].append(label_entry)
+                        break
+
+            def append_to_line(ave_score, line):
+                formatted_score = '{}'.format(ave_score)
+                return ' '*(10 - len(formatted_score)) + formatted_score
+                
+            for threshold in thresholds:
+                line = '{} macro '.format(threshold)
+                line = ' '*(13 - len(line)) + line
+                for metric in ['precision', 'recall', 'f1-score']:
+                    scores = [item[metric] for item in bin_data[threshold]]
+                    ave_score = np.round(np.average(scores), 2)
+                    line += append_to_line(ave_score, line)
+                support = sum([item['support'] for item in bin_data[threshold]])
+                line += append_to_line(support, line)
+                cls_report += '\n' + line
+
             with open(report_predict_file, "w") as writer:
                 writer.write(cls_report)
             with open(output_predict_file, "w") as writer:
