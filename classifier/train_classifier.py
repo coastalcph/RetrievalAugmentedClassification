@@ -591,7 +591,7 @@ def main():
                         bin_data[threshold].append(label_entry)
                         break
 
-            def append_to_line(ave_score, line):
+            def append_to_line(ave_score):
                 formatted_score = '{}'.format(ave_score)
                 return ' '*(10 - len(formatted_score)) + formatted_score
                 
@@ -601,9 +601,9 @@ def main():
                 for metric in ['precision', 'recall', 'f1-score']:
                     scores = [item[metric] for item in bin_data[threshold]]
                     ave_score = np.round(np.average(scores), 2)
-                    line += append_to_line(ave_score, line)
+                    line += append_to_line(ave_score)
                 support = sum([item['support'] for item in bin_data[threshold]])
-                line += append_to_line(support, line)
+                line += append_to_line(support)
                 cls_report += '\n' + line
 
             with open(report_predict_file, "w") as writer:
