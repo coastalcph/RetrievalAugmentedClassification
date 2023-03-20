@@ -56,9 +56,9 @@ def write_neighbors(args, split, query2neighbors):
     json.dump(query2neighbors, open(output_path, 'w'))
 
 def main(args):
-    if 'sentence' in args.model_name or 'setfit' in args.model_name:
+    if args.model_type == "sentence_transformer":
         embedder = SentenceTransformer(args.model_name)
-    else:
+    elif args.model_type == "classifier":
         from torch import nn
         class Pooler(nn.Module):
             def __init__(self):
@@ -71,6 +71,10 @@ def main(args):
             word_embedding_model.auto_model.pooler = Pooler()
         pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='cls')
         embedder = SentenceTransformer(modules=[word_embedding_model, pooling_model])
+    elif args.model_type == "pretrained_lm":
+        word_embedding_model = models.Transformer(args.model_name, max_seq_length=args.max_seq_length)
+        pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(), pooling_mode='mean')
+        model = SentenceTransformer(modules=[word_embedding_model, pooling_model])
 
     corpus, queries = load_data(args)
     
@@ -99,6 +103,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_name", type=str, default='bioasq-l2', help="Name of dataset as stored on HF")
     parser.add_argument("--output_dir", type=str, help="Where to store the cached embedding vectors and NN ids")
 
+    parser.add_argument("--model_type", type=str, help="Model type to decide what pooler to use [sentence_transformer, classifier, pretrained_lm]"
     parser.add_argument("--model_name", type=str, help="Directory where trained model is saved")
     parser.add_argument("--max_seq_length", type=int, default=512, help="Max length")
 
