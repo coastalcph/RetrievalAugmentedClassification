@@ -93,7 +93,7 @@ def main(args):
     write_embeddings(args, corpus, corpus_embeddings, 'corpus')
     
     for split in ['train', 'validation', 'test']:
-        print('Mapping {} split'.format(split))
+        print('Mapping {} split and writing to {}'.format(split, os.path.join(DATA_DIR, args.output_dir, '{}.json'.format(split))))
         query2neighbors = find_neighbors(embedder, corpus, corpus_embeddings, queries[split], query_embeddings[split], split)
         write_neighbors(args, split, query2neighbors)
 
@@ -103,7 +103,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_name", type=str, default='bioasq-l2', help="Name of dataset as stored on HF")
     parser.add_argument("--output_dir", type=str, help="Where to store the cached embedding vectors and NN ids")
 
-    parser.add_argument("--model_type", type=str, help="Model type to decide what pooler to use [sentence_transformer, classifier, pretrained_lm]"
+    parser.add_argument("--model_type", type=str, help="Model type to decide what pooler to use [sentence_transformer, classifier, pretrained_lm]")
     parser.add_argument("--model_name", type=str, help="Directory where trained model is saved")
     parser.add_argument("--max_seq_length", type=int, default=512, help="Max length")
 
