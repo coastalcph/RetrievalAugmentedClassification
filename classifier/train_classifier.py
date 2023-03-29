@@ -143,6 +143,9 @@ class ModelArguments:
     encode_document: Optional[bool] = field(
         default=True, metadata={"help": "Whether to encode input document or not"}
     )
+    freeze_encoder: Optional[bool] = field(
+            default=False, metadata={"help": "If true, encoder is not finetuned"}
+    )
     dec_layers: Optional[int] = field(
         default=1, metadata={"help": "Number of decoder layers for RA"}
     )
@@ -381,6 +384,10 @@ def main():
         )
     else:
         raise NotImplementedError(f'Models of type {config.model_type} are not supported!!!')
+    
+    if model_args.freeze_encoder:
+        for param in model.encoder.parameters():
+            param.requires_grad = False
 
     # Preprocessing the datasets
     # Padding strategy
