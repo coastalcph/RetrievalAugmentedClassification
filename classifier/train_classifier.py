@@ -152,6 +152,9 @@ class ModelArguments:
     retrieval_augmentation: Optional[bool] = field(
         default=False, metadata={"help": "Whether to use retrieval augmentation or not"}
     )
+    finetune_retrieval: Optional[bool] = field(
+            default=False, metadata={"help": "Whether to finetune the retrieval query encoder"}
+    )
     no_neighbors: Optional[int] = field(
         default=16, metadata={"help": "Number of top K retrieved documents to be used"}
     )
@@ -266,7 +269,7 @@ def main():
     set_seed(training_args.seed)
     label_list = None
 
-    if model_args.retrieval_augmentation:
+    if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
         datastore = h5py.File(os.path.join(DATA_DIR, data_args.embeddings_path, 'corpus.hdf5'))
 
     # In distributed training, the load_dataset function guarantees that only one local process can concurrently
@@ -325,8 +328,15 @@ def main():
     )
     # add retrieval_augmentation param in config
     if model_args.retrieval_augmentation:
-        assert model_args.augment_with_documents or model_args.augment_with_labels
+        assert model_args.augment_with_documents or model_args.augment_with_labels, "Specify at least one of 'documents' or 'labels' for RA"
+    if model_args.finetune_retrieval: 
+        assert not model_args.augment_with_labels, "Finetuned retrieval with label augmentation is currently not implemented."
+
+    if model_args.finetune_retrieval:
+        config.full_embeddings_path = os.path.join(DATA_DIR, data_args.embeddings_path, 'corpus.hdf5')
     config.retrieval_augmentation = model_args.retrieval_augmentation
+    config.finetune_retrieval = model_args.finetune_retrieval
+    config.no_neighbors = model_args.no_neighbors
     config.augment_with_documents = model_args.augment_with_documents
     config.augment_with_labels = model_args.augment_with_labels
     config.encode_document = model_args.encode_document
@@ -406,7 +416,7 @@ def main():
             batch["global_attention_mask"][:, 0] = 1
             batch["global_attention_mask"] = list(batch["global_attention_mask"])
 
-        if model_args.retrieval_augmentation:
+        if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
             if model_args.augment_with_documents:
                 batch["decoder_input_ids"] = examples["neighbor_embeddings"]
             if model_args.augment_with_labels:
@@ -432,7 +442,7 @@ def main():
         train_dataset = train_dataset.select(sample_ids)
 
     if training_args.do_train or data_args.do_train_eval:
-        if model_args.retrieval_augmentation:
+        if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
             train_dataset = update_dataset_neighbors(train_dataset, datastore, doc2labels,
                                                      embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'train.json'),
                                                      no_neighbors=model_args.no_neighbors)
@@ -460,7 +470,7 @@ def main():
     if training_args.do_eval:
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
-        if model_args.retrieval_augmentation:
+        if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
             eval_dataset = update_dataset_neighbors(eval_dataset, datastore, doc2labels,
                                                     embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'validation.json'),
                                                     no_neighbors=model_args.no_neighbors)
@@ -476,7 +486,7 @@ def main():
     if training_args.do_predict:
         if data_args.max_predict_samples is not None:
             predict_dataset = predict_dataset.select(range(data_args.max_predict_samples))
-        if model_args.retrieval_augmentation:
+        if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
             predict_dataset = update_dataset_neighbors(predict_dataset, datastore, doc2labels,
                                                        embeddings_path=os.path.join(DATA_DIR, data_args.embeddings_path, 'test.json'),
                                                        no_neighbors=model_args.no_neighbors)

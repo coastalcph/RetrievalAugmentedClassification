@@ -23,6 +23,32 @@ from transformers.models.bert.modeling_bert import BertPreTrainedModel, Sequence
 from transformers.models.roberta.modeling_roberta import RobertaClassificationHead, RobertaModel, RobertaPreTrainedModel
 from transformers.models.led.modeling_led import LEDDecoder, LEDConfig
 
+import h5py
+import faiss
+import faiss.contrib.torch_utils
+
+class Retriever:
+    def __init__(self, embeddings_path, k):
+        self.embeddings, self.index = self._build_index(embeddings_path)
+        self.k = k
+
+    def _build_index(self, embeddings_path):
+        embeddings_h5py = h5py.File(embeddings_path)
+        embeddings_list = [torch.Tensor(embeddings_h5py[idx][:]) for idx in embeddings_h5py]
+        embeddings = torch.stack(embeddings_list)
+        #embeddings_norm = faiss.normalize_L2(embeddings)
+        index = faiss.IndexFlatIP(embeddings.shape[1])
+        index.add(embeddings)
+
+        res = faiss.StandardGpuResources()
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+
+        return embeddings.cuda(), index
+
+    def __call__(self, query_hidden_states):
+        #query_hidden_states_norm = faiss.normalize_L2(query_hidden_states)
+        _, doc_ids = self.index.search(query_hidden_states.contiguous(), self.k)
+        return self.embeddings[doc_ids, :]
 
 class RALongformerForSequenceClassification(LongformerPreTrainedModel):
     _keys_to_ignore_on_load_missing = [
@@ -348,6 +374,12 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
         else:
             self.roberta = None
 
+        # retrieval
+        if config.retrieval_augmentation and config.finetune_retrieval:
+            self.retriever = Retriever(config.full_embeddings_path, config.no_neighbors)
+        elif config.retrieval_augmentation:
+            self.retriever = None
+
         # augmentation data processing
         if config.augment_with_documents and config.augment_with_labels:
             self.resize_decoder_inputs = torch.nn.Linear(config.hidden_size + config.num_labels, config.hidden_size, bias=False)
@@ -423,6 +455,9 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
         if self.ra_decoder:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
+    
+            if decoder_input_ids is None and self.retriever is not None:
+                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :])
 
             if decoder_manyhot_ids is not None:
                 if decoder_input_ids is not None:
