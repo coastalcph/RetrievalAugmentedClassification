@@ -396,10 +396,6 @@ def main():
     else:
         raise NotImplementedError(f'Models of type {config.model_type} are not supported!!!')
     
-    if model_args.freeze_encoder:
-        for param in model.encoder.parameters():
-            param.requires_grad = False
-
     # Preprocessing the datasets
     # Padding strategy
     if data_args.pad_to_max_length:
