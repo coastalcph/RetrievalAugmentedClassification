@@ -364,6 +364,10 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
+        if model_args.freeze_encoder:
+            for param in model.longformer.parameters():
+                param.requires_grad = False
+
     elif config.model_type == 'roberta':
         model = RARoBERTaForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
@@ -373,6 +377,10 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
+        if model_args.freeze_encoder:
+            for param in model.roberta.parameters():
+                param.requires_grad = False
+
     elif config.model_type == 'bert':
         model = RABERTForSequenceClassification.from_pretrained(
             model_args.model_name_or_path,
@@ -382,6 +390,9 @@ def main():
             cache_dir=model_args.cache_dir,
             revision=model_args.model_revision,
         )
+        if model_args.freeze_encoder:
+            for param in model.bert.parameters():
+                param.requires_grad = False
     else:
         raise NotImplementedError(f'Models of type {config.model_type} are not supported!!!')
     
@@ -505,7 +516,7 @@ def main():
                 load_from_cache_file=False,
                 desc="Running tokenizer on prediction dataset",
             )
-
+    
     # You can define your custom compute_metrics function. It takes an `EvalPrediction` object (a namedtuple with a
     # predictions and label_ids field) and has to return a dictionary string to float.
     def compute_metrics(p: EvalPrediction):

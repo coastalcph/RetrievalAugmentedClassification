@@ -62,7 +62,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
         super().__init__(config)
 
         # document encoder
-        self.encoder = LongformerModel(config, add_pooling_layer=False)
+        self.longformer = LongformerModel(config, add_pooling_layer=False)
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
@@ -129,7 +129,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
             # global attention on cls token
             global_attention_mask[:, 0] = 1
 
-        encoder_outputs = self.encoder(
+        encoder_outputs = self.longformer(
             input_ids,
             attention_mask=attention_mask,
             global_attention_mask=global_attention_mask,
@@ -219,12 +219,12 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
 
     def __init__(self, config):
         super().__init__(config)
-
+        
         # document encoder
         if not config.retrieval_augmentation or (config.retrieval_augmentation and config.encode_document):
-            self.encoder = BertModel(config, add_pooling_layer=False)
+            self.bert = BertModel(config, add_pooling_layer=False)
         else:
-            self.encoder = None
+            self.bert = None
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
@@ -288,9 +288,9 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
                     `config.num_labels > 1` a classification loss is computed (Cross-Entropy).
                 """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
-        if self.encoder:
-            encoder_outputs = self.encoder(
+        
+        if self.bert:
+            encoder_outputs = self.bert(
                 input_ids,
                 attention_mask=attention_mask,
                 head_mask=None,
@@ -388,9 +388,9 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
 
         # document encoder
         if not config.retrieval_augmentation or (config.retrieval_augmentation and config.encode_document):
-            self.encoder = RobertaModel(config, add_pooling_layer=False)
+            self.roberta = RobertaModel(config, add_pooling_layer=False)
         else:
-            self.encoder = None
+            self.roberta = None
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
@@ -455,8 +455,8 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
                 """
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
-        if self.encoder:
-            encoder_outputs = self.encoder(
+        if self.roberta:
+            encoder_outputs = self.roberta(
                 input_ids,
                 attention_mask=attention_mask,
                 head_mask=None,
