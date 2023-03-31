@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-""" PyTorch T5 model."""
+""" PyTorch model."""
 import torch.utils.checkpoint
 from torch.nn import BCEWithLogitsLoss, CrossEntropyLoss, MSELoss
 from typing import Optional, Tuple, Union
@@ -29,26 +29,35 @@ import faiss.contrib.torch_utils
 
 class Retriever:
     def __init__(self, embeddings_path, k):
-        self.embeddings, self.index = self._build_index(embeddings_path)
+        self.doc_ids, self.embeddings, self.index = self._build_index(embeddings_path)
         self.k = k
 
     def _build_index(self, embeddings_path):
         embeddings_h5py = h5py.File(embeddings_path)
-        embeddings_list = [torch.Tensor(embeddings_h5py[idx][:]) for idx in embeddings_h5py]
+        doc_ids = [doc_id for doc_id in embeddings_h5py]
+        embeddings_list = [torch.Tensor(embeddings_h5py[idx][:]) for idx in doc_ids]
         embeddings = torch.stack(embeddings_list)
-        #embeddings_norm = faiss.normalize_L2(embeddings)
         index = faiss.IndexFlatIP(embeddings.shape[1])
         index.add(embeddings)
 
         res = faiss.StandardGpuResources()
         index = faiss.index_cpu_to_gpu(res, 0, index)
 
-        return embeddings.cuda(), index
+        doc_ids = torch.as_tensor([int(d) for d in doc_ids], dtype=torch.int32).cuda()
 
-    def __call__(self, query_hidden_states):
-        #query_hidden_states_norm = faiss.normalize_L2(query_hidden_states)
-        _, doc_ids = self.index.search(query_hidden_states.contiguous(), self.k)
-        return self.embeddings[doc_ids, :]
+        return doc_ids, embeddings.cuda(), index
+
+    def __call__(self, query_hidden_states, doc_id):
+        _, neighbor_index = self.index.search(query_hidden_states.contiguous(), self.k + 1)
+
+        # filter out input doc from neighbors
+        doc_index = (doc_id == self.doc_ids).nonzero(as_tuple=True)[-1].unsqueeze(1)
+        if doc_index.nelement():
+            mask = neighbor_index.ne(doc_index) # set input doc id to False
+            mask[:, -1] = mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
+            neighbor_index = neighbor_index[mask].reshape([-1, self.k]) 
+        
+        return self.embeddings[neighbor_index, :]
 
 class RALongformerForSequenceClassification(LongformerPreTrainedModel):
     _keys_to_ignore_on_load_missing = [
@@ -106,6 +115,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
     def forward(
             self,
             input_ids: Optional[torch.Tensor] = None,
+            doc_id: Optional[list] = None,
             attention_mask: Optional[torch.Tensor] = None,
             global_attention_mask: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
@@ -145,7 +155,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
         sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
         if decoder_input_ids is None and self.retriever is not None:
-            decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :])
+            decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_id)
 
         if decoder_manyhot_ids is not None:
             if decoder_input_ids is not None:
@@ -271,6 +281,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
     def forward(
             self,
             input_ids: Optional[torch.Tensor] = None,
+            doc_id: Optional[list] = None,
             attention_mask: Optional[torch.Tensor] = None,
             input_embeds: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
@@ -309,7 +320,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
             if decoder_input_ids is None and self.retriever is not None:
-                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :])
+                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_id)
 
             if decoder_manyhot_ids is not None:
                 if decoder_input_ids is not None:
@@ -437,6 +448,7 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
     def forward(
             self,
             input_ids: Optional[torch.Tensor] = None,
+            doc_id: Optional[list] = None,
             attention_mask: Optional[torch.Tensor] = None,
             input_embeds: Optional[torch.Tensor] = None,
             decoder_input_ids: Optional[torch.Tensor] = None,
@@ -475,7 +487,7 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
     
             if decoder_input_ids is None and self.retriever is not None:
-                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :])
+                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_id)
 
             if decoder_manyhot_ids is not None:
                 if decoder_input_ids is not None:

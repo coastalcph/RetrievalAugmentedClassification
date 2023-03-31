@@ -440,13 +440,15 @@ def main():
                 batch["decoder_manyhot_ids"] = batch_neighbor_labels
             
             batch["decoder_attention_mask"] = np.ones((len(examples["neighbor_embeddings"]), model_args.no_neighbors), dtype=int)
+        if model_args.retrieval_augmentation and model_args.finetune_retrieval:
+            batch["doc_id"] = np.array([[int(d)] for d in examples["doc_id"]], dtype=np.int32)
 
         if not model_args.encode_document:
             batch["input_embeds"] = examples['doc_embedding']
 
         batch["label_ids"] = [[1.0 if label in labels else 0.0 for label in label_list] for labels in examples["labels"]]
         batch['labels'] = batch['label_ids']
-
+        
         return batch
 
     doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
@@ -480,7 +482,7 @@ def main():
         # Log a few random samples from the training set:
         for index in random.sample(range(len(train_dataset)), 3):
             logger.info(f"Sample {index} of the training set: {train_dataset[index]}.")
-
+    
     if training_args.do_eval:
         if data_args.max_eval_samples is not None:
             eval_dataset = eval_dataset.select(range(data_args.max_eval_samples))
