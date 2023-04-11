@@ -43,7 +43,7 @@ class Retriever:
         res = faiss.StandardGpuResources()
         index = faiss.index_cpu_to_gpu(res, 0, index)
 
-        doc_ids = torch.as_tensor([int(d) for d in doc_ids], dtype=torch.int32).cuda()
+        doc_ids = torch.as_tensor([int(d) for d in doc_ids], dtype=torch.int64).cuda()
 
         return doc_ids, embeddings.cuda(), index
 
@@ -53,10 +53,11 @@ class Retriever:
         # filter out input doc from neighbors
         doc_index = (doc_id == self.doc_ids).nonzero(as_tuple=True)[-1].unsqueeze(1)
         if doc_index.nelement():
-            mask = neighbor_index.ne(doc_index) # set input doc id to False
-            mask[:, -1] = mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
-            neighbor_index = neighbor_index[mask].reshape([-1, self.k]) 
-        
+            try: 
+                mask = neighbor_index.ne(doc_index) # set input doc id to False
+                mask[:, -1] *= mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
+                neighbor_index = neighbor_index[mask].reshape([-1, self.k]) 
+            except: import pdb; pdb.set_trace()
         return self.embeddings[neighbor_index, :]
 
 class RALongformerForSequenceClassification(LongformerPreTrainedModel):
@@ -251,9 +252,13 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             self.ra_config.decoder_layers = config.dec_layers
             if config.augment_with_documents:
                 self.document_decoder = LEDDecoder(self.ra_config)
+            else:
+                self.document_decoder = None
             if config.augment_with_labels:
                 self.resize_label_decoder_inputs = torch.nn.Linear(config.num_labels, config.hidden_size, bias=False)
                 self.label_decoder = LEDDecoder(self.ra_config)
+            else:
+                self.label_decoder = None
         else:
             self.document_decoder = None
             self.label_decoder = None
@@ -314,13 +319,13 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
         else:
             encoder_outputs = [torch.unsqueeze(input_embeds, dim=1)]
 
-        if self.document_decoder or self.label_decoder:
+        if self.document_decoder is not None or self.label_decoder is not None:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
             if decoder_input_ids is None and self.retriever is not None:
                 decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_id)
-
+            
             # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
             if decoder_input_ids is not None:
                 decoder_outputs = self.document_decoder(
