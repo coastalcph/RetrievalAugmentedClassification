@@ -441,7 +441,7 @@ def main():
             
             batch["decoder_attention_mask"] = np.ones((len(examples["neighbor_embeddings"]), model_args.no_neighbors), dtype=int)
         if model_args.retrieval_augmentation and model_args.finetune_retrieval:
-            batch["doc_id"] = np.array([[int(d)] for d in examples["doc_id"]], dtype=np.int32)
+            batch["doc_id"] = np.array([[int(d)] for d in examples["doc_id"]], dtype=np.int64)
 
         if not model_args.encode_document:
             batch["input_embeds"] = examples['doc_embedding']

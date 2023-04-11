@@ -43,7 +43,7 @@ class Retriever:
         res = faiss.StandardGpuResources()
         index = faiss.index_cpu_to_gpu(res, 0, index)
 
-        doc_ids = torch.as_tensor([int(d) for d in doc_ids], dtype=torch.int32).cuda()
+        doc_ids = torch.as_tensor([int(d) for d in doc_ids], dtype=torch.int64).cuda()
 
         return doc_ids, embeddings.cuda(), index
 
@@ -54,9 +54,8 @@ class Retriever:
         doc_index = (doc_id == self.doc_ids).nonzero(as_tuple=True)[-1].unsqueeze(1)
         if doc_index.nelement():
             mask = neighbor_index.ne(doc_index) # set input doc id to False
-            mask[:, -1] = mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
-            neighbor_index = neighbor_index[mask].reshape([-1, self.k]) 
-        
+            mask[:, -1] *= mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
+            neighbor_index = neighbor_index[mask].reshape([-1, self.k])
         return self.embeddings[neighbor_index, :]
 
 class RALongformerForSequenceClassification(LongformerPreTrainedModel):
@@ -315,7 +314,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
         else:
             encoder_outputs = [torch.unsqueeze(input_embeds, dim=1)]
 
-        if self.ra_decoder:
+        if self.ra_decoder is not None:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
