@@ -441,7 +441,7 @@ def main():
             
             batch["decoder_attention_mask"] = np.ones((len(examples["neighbor_embeddings"]), model_args.no_neighbors), dtype=int)
         if model_args.retrieval_augmentation and model_args.finetune_retrieval:
-            batch["doc_id"] = np.array([[int(d)] for d in examples["doc_id"]], dtype=np.int64)
+            batch["doc_idx"] = np.array([[doc2idx.get(doc_id,idx_placeholder)] for doc_id in examples["doc_id"]], dtype=np.int64)
 
         if not model_args.encode_document:
             batch["input_embeds"] = examples['doc_embedding']
@@ -452,11 +452,17 @@ def main():
         return batch
 
     doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
+    doc2idx = {item['doc_id']: i for i, item in enumerate(train_dataset)}
+    idx_placeholder = len(doc2idx) # used for eval and predict datasets
+
+    # coordinate doc ids with retrieval datastore in model
+    if model_args.finetune_retrieval:
+        model.retriever.build_index(doc2idx)
+
     if data_args.max_train_samples is not None:
         random.seed(42)
         sample_ids = random.sample(range(len(train_dataset)), k=min(data_args.max_train_samples, len(train_dataset)))
         train_dataset = train_dataset.select(sample_ids)
-
     if training_args.do_train or data_args.do_train_eval:
         if model_args.retrieval_augmentation and not model_args.finetune_retrieval:
             train_dataset = update_dataset_neighbors(train_dataset, datastore, doc2labels,
