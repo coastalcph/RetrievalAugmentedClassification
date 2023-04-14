@@ -239,10 +239,10 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
 
 class RABERTForSequenceClassification(BertPreTrainedModel):
     _keys_to_ignore_on_load_missing = [
-        r"ra_decoder", r"cls", r"classifier",
+        r"document_decoder", r"label_decoder", r"cls", r"classifier",
     ]
     _keys_to_ignore_on_load_unexpected = [
-        r"ra_decoder", r"cls",  r"classifier",
+        r"document_decoder", r"label_decoder", r"cls",  r"classifier",
     ]
 
     def __init__(self, config):
@@ -421,10 +421,10 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
 
 class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
     _keys_to_ignore_on_load_missing = [
-        r"ra_decoder", r"cls", r"classifier",
+        r"document_decoder", r"label_decoder", r"cls", r"classifier",
     ]
     _keys_to_ignore_on_load_unexpected = [
-        r"ra_decoder", r"cls",  r"classifier",
+        r"document_decoder", r"label_decoder", r"cls",  r"classifier",
     ]
 
     def __init__(self, config):
@@ -442,12 +442,6 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
         elif config.retrieval_augmentation:
             self.retriever = None
 
-        # augmentation data processing
-        if config.augment_with_documents and config.augment_with_labels:
-            self.resize_decoder_inputs = torch.nn.Linear(config.hidden_size + config.num_labels, config.hidden_size, bias=False)
-        elif config.augment_with_labels:
-            self.resize_decoder_inputs = torch.nn.Linear(config.num_labels, config.hidden_size, bias=False)
-
         # retrieval-augmented decoder
         if config.retrieval_augmentation:
             self.ra_config = LEDConfig()
@@ -455,10 +449,19 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
             self.ra_config.decoder_ffn_dim = config.hidden_size
             self.ra_config.decoder_attention_heads = config.dec_attention_heads
             self.ra_config.decoder_layers = config.dec_layers
-            self.ra_decoder = LEDDecoder(self.ra_config)
+            if config.augment_with_documents:
+                self.document_decoder = LEDDecoder(self.ra_config)
+            else:
+                self.document_decoder = None
+            if config.augment_with_labels:
+                self.resize_label_decoder_inputs = torch.nn.Linear(config.num_labels, config.hidden_size, bias=False)
+                self.label_decoder = LEDDecoder(self.ra_config)
+            else:
+                self.label_decoder = None
         else:
-            self.ra_decoder = None
-
+            self.document_decoder = None
+            self.label_decoder = None
+            
         # classifier
         self.num_labels = config.num_labels
         self.classifier = RobertaClassificationHead(config)
@@ -515,36 +518,49 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
         else:
             encoder_outputs = [torch.unsqueeze(input_embeds, dim=1)]
 
-        if self.ra_decoder:
+        if self.document_decoder is not None or self.label_decoder is not None:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
     
             if (decoder_input_ids is None and decoder_manyhot_ids is None) and self.retriever is not None:
                 decoder_input_ids, decoder_manyhot_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
-    
-            if decoder_manyhot_ids is not None:
-                if decoder_input_ids is not None:
-                    decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
-                    decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
-                else:
-                    decoder_input_ids = self.resize_decoder_inputs(decoder_manyhot_ids)
 
             # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
-            decoder_outputs = self.ra_decoder(
-                input_ids=None,
-                attention_mask=sequence_cls_mask,
-                encoder_hidden_states=decoder_input_ids,
-                encoder_attention_mask=decoder_attention_mask,
-                head_mask=None,
-                cross_attn_head_mask=None,
-                past_key_values=None,
-                inputs_embeds=sequence_cls_output,
-                use_cache=None,
-                output_attentions=output_attentions,
-                output_hidden_states=output_hidden_states,
-                return_dict=return_dict,
-            )
+            if decoder_input_ids is not None:
+                decoder_outputs = self.document_decoder(
+                    input_ids=None,
+                    attention_mask=sequence_cls_mask,
+                    encoder_hidden_states=decoder_input_ids,
+                    encoder_attention_mask=decoder_attention_mask,
+                    head_mask=None,
+                    cross_attn_head_mask=None,
+                    past_key_values=None,
+                    inputs_embeds=sequence_cls_output,
+                    use_cache=None,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                    return_dict=return_dict,
+                    )
+            else:
+                decoder_outputs = [sequence_cls_output]
 
+            if decoder_manyhot_ids is not None:
+                decoder_manyhot_ids = self.resize_label_decoder_inputs(decoder_manyhot_ids)
+                decoder_outputs = self.label_decoder(
+                    input_ids=None,
+                    attention_mask=sequence_cls_mask,
+                    encoder_hidden_states=decoder_manyhot_ids,
+                    encoder_attention_mask=decoder_attention_mask,
+                    head_mask=None,
+                    cross_attn_head_mask=None,
+                    past_key_values=None,
+                    inputs_embeds=decoder_outputs[0],
+                    use_cache=None,
+                    output_attentions=output_attentions,
+                    output_hidden_states=output_hidden_states,
+                    return_dict=return_dict,
+                    )
+            
             sequence_output = decoder_outputs[0]
         else:
             sequence_output = encoder_outputs[0]
@@ -581,8 +597,8 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
         return SequenceClassifierOutput(
             loss=loss,
             logits=logits,
-            hidden_states=decoder_outputs.hidden_states if self.ra_decoder else encoder_outputs.hidden_states,
-            attentions=decoder_outputs.cross_attentions if self.ra_decoder else encoder_outputs.attentions,
+            hidden_states=decoder_outputs.hidden_states if (self.document_decoder or self.label_decoder) else encoder_outputs.hidden_states,
+            attentions=decoder_outputs.cross_attentions if (self.document_decoder or self.label_decoder) else encoder_outputs.attentions,
         )
 
 
