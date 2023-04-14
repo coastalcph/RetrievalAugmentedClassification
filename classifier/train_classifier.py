@@ -332,8 +332,6 @@ def main():
     # add retrieval_augmentation param in config
     if model_args.retrieval_augmentation:
         assert model_args.augment_with_documents or model_args.augment_with_labels, "Specify at least one of 'documents' or 'labels' for RA"
-    if model_args.finetune_retrieval: 
-        assert not model_args.augment_with_labels, "Finetuned retrieval with label augmentation is currently not implemented."
 
     if model_args.finetune_retrieval:
         config.full_embeddings_path = os.path.join(DATA_DIR, data_args.embeddings_path, 'corpus.hdf5')
@@ -451,15 +449,13 @@ def main():
         
         return batch
 
-    doc2labels = {item['doc_id']: item['labels'] for item in train_dataset}
+    doc2label_ids = {item['doc_id']: [1.0 if label in item['labels'] else 0.0 for label in label_list] for item in train_dataset}
     doc2idx = {item['doc_id']: i for i, item in enumerate(train_dataset)}
     idx_placeholder = len(doc2idx) # used for eval and predict datasets
 
     # coordinate doc ids with retrieval datastore in model
-    if model_args.finetune_retrieval and model_args.augment_with_labels:
-        model.retriever.build_index(doc2idx, doc2labels)
-    else:
-        model.retriever.build_index(doc2idx)
+    if model_args.finetune_retrieval:
+        model.retriever.build_index(doc2idx, doc2label_ids)
 
     if data_args.max_train_samples is not None:
         random.seed(42)

@@ -31,7 +31,7 @@ class Retriever:
     def __init__(self, config):
         self.config = config
 
-    def build_index(self, doc2idx, doc2labels):
+    def build_index(self, doc2idx, doc2label_ids):
         embeddings_h5py = h5py.File(self.config.full_embeddings_path)
         doc_ids = [doc_id for doc_id in embeddings_h5py]
         self.doc_idxs = torch.as_tensor([doc2idx[doc_id] for doc_id in doc_ids], dtype=torch.int64).cuda()
@@ -46,26 +46,24 @@ class Retriever:
         if self.config.augment_with_documents:
             self.embeddings = embeddings.cuda()
         if self.config.augment_with_labels:
-            doc_labels = [doc2labels[doc_id] for doc_id in doc_ids]
-            doc_labels = [[1.0 if label in labels else 0.0 for label in label_list] for labels in doc_labels]
-            self.doc_labels = torch.as_tensor(doc_labels)
+            self.doc_label_ids = torch.as_tensor([doc2label_ids[doc_id] for doc_id in doc_ids]).cuda()
 
     def __call__(self, query_hidden_states, doc_idx):
-        _, neighbor_position = self.index.search(query_hidden_states.contiguous(), self.no_neighbors + 1)
+        _, neighbor_position = self.index.search(query_hidden_states.contiguous(), self.config.no_neighbors + 1)
 
         # filter out input doc from neighbors
         doc_position = (doc_idx == self.doc_idxs).nonzero(as_tuple=True)[-1].unsqueeze(1)
         if doc_position.nelement():
             mask = neighbor_position.ne(doc_position) # set input doc id to False
-            mask[:, -1] *= mask.sum(axis=1) <= self.no_neighbors # set last doc id to False if no input doc id was masked
-            neighbor_position = neighbor_position[mask].reshape([-1, self.no_neighbors])
+            mask[:, -1] *= mask.sum(axis=1) <= self.config.no_neighbors # set last doc id to False if no input doc id was masked
+            neighbor_position = neighbor_position[mask].reshape([-1, self.config.no_neighbors])
 
         if self.config.augment_with_documents:
             neighbor_embeddings = self.embeddings[neighbor_position, :]
         else:
             neighbor_embeddings = None
         if self.config.augment_with_labels:
-            neighbor_labels = self.doc_labels[neighbor_position, :]
+            neighbor_labels = self.doc_label_ids[neighbor_position, :]
         else:
             neighbor_labels = None
 
@@ -338,7 +336,6 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
         if self.ra_decoder is not None:
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
-
             if (decoder_input_ids is None and decoder_manyhot_ids is None) and self.retriever is not None:
                 decoder_input_ids, decoder_manyhot_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
 
