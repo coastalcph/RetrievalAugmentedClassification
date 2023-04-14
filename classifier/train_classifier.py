@@ -456,7 +456,9 @@ def main():
     idx_placeholder = len(doc2idx) # used for eval and predict datasets
 
     # coordinate doc ids with retrieval datastore in model
-    if model_args.finetune_retrieval:
+    if model_args.finetune_retrieval and model_args.augment_with_labels:
+        model.retriever.build_index(doc2idx, doc2labels)
+    else:
         model.retriever.build_index(doc2idx)
 
     if data_args.max_train_samples is not None:

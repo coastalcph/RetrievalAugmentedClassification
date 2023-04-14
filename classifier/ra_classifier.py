@@ -28,35 +28,48 @@ import faiss
 import faiss.contrib.torch_utils
 
 class Retriever:
-    def __init__(self, embeddings_path, k):
-        self.embeddings_path = embeddings_path
-        #self.doc_ids, self.embeddings, self.index = self._build_index(embeddings_path)
-        self.k = k
+    def __init__(self, config):
+        self.config = config
 
-    def build_index(self, doc2idx):
-        embeddings_h5py = h5py.File(self.embeddings_path)
+    def build_index(self, doc2idx, doc2labels):
+        embeddings_h5py = h5py.File(self.config.full_embeddings_path)
         doc_ids = [doc_id for doc_id in embeddings_h5py]
+        self.doc_idxs = torch.as_tensor([doc2idx[doc_id] for doc_id in doc_ids], dtype=torch.int64).cuda()
+
         embeddings_list = [torch.Tensor(embeddings_h5py[doc_id][:]) for doc_id in doc_ids]
         embeddings = torch.stack(embeddings_list)
         index = faiss.IndexFlatIP(embeddings.shape[1])
         index.add(embeddings)
-
         res = faiss.StandardGpuResources()
-
         self.index = faiss.index_cpu_to_gpu(res, 0, index)
-        self.doc_idxs = torch.as_tensor([doc2idx[doc_id] for doc_id in doc_ids], dtype=torch.int64).cuda()
-        self.embeddings = embeddings.cuda()
+        
+        if self.config.augment_with_documents:
+            self.embeddings = embeddings.cuda()
+        if self.config.augment_with_labels:
+            doc_labels = [doc2labels[doc_id] for doc_id in doc_ids]
+            doc_labels = [[1.0 if label in labels else 0.0 for label in label_list] for labels in doc_labels]
+            self.doc_labels = torch.as_tensor(doc_labels)
 
     def __call__(self, query_hidden_states, doc_idx):
-        _, neighbor_position = self.index.search(query_hidden_states.contiguous(), self.k + 1)
+        _, neighbor_position = self.index.search(query_hidden_states.contiguous(), self.no_neighbors + 1)
 
         # filter out input doc from neighbors
         doc_position = (doc_idx == self.doc_idxs).nonzero(as_tuple=True)[-1].unsqueeze(1)
         if doc_position.nelement():
             mask = neighbor_position.ne(doc_position) # set input doc id to False
-            mask[:, -1] *= mask.sum(axis=1) <= self.k # set last doc id to False if no input doc id was masked
-            neighbor_position = neighbor_position[mask].reshape([-1, self.k])
-        return self.embeddings[neighbor_position, :]
+            mask[:, -1] *= mask.sum(axis=1) <= self.no_neighbors # set last doc id to False if no input doc id was masked
+            neighbor_position = neighbor_position[mask].reshape([-1, self.no_neighbors])
+
+        if self.config.augment_with_documents:
+            neighbor_embeddings = self.embeddings[neighbor_position, :]
+        else:
+            neighbor_embeddings = None
+        if self.config.augment_with_labels:
+            neighbor_labels = self.doc_labels[neighbor_position, :]
+        else:
+            neighbor_labels = None
+
+        return neighbor_embeddings, neighbor_labels
 
 class RALongformerForSequenceClassification(LongformerPreTrainedModel):
     _keys_to_ignore_on_load_missing = [
@@ -74,7 +87,7 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
-            self.retriever = Retriever(config.full_embeddings_path, config.no_neighbors)
+            self.retriever = Retriever(config)
         elif config.retrieval_augmentation:
             self.retriever = None
 
@@ -84,13 +97,16 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
         elif config.augment_with_labels:
             self.resize_decoder_inputs = torch.nn.Linear(config.num_labels, config.hidden_size, bias=False)
 
-        # retrieval-augmented decoder
-        self.ra_config = LEDConfig()
-        self.ra_config.d_model = config.hidden_size
-        self.ra_config.decoder_ffn_dim = config.hidden_size
-        self.ra_config.decoder_attention_heads = 1
-        self.ra_config.decoder_layers = 1
-        self.ra_decoder = LEDDecoder(self.ra_config)
+        if config.retrieval_augmentation:
+            # retrieval-augmented decoder
+            self.ra_config = LEDConfig()
+            self.ra_config.d_model = config.hidden_size
+            self.ra_config.decoder_ffn_dim = config.hidden_size
+            self.ra_config.decoder_attention_heads = 1
+            self.ra_config.decoder_layers = 1
+            self.ra_decoder = LEDDecoder(self.ra_config)
+        else:
+            self.ra_decoder = None
 
         # classifier
         self.num_labels = config.num_labels
@@ -150,36 +166,41 @@ class RALongformerForSequenceClassification(LongformerPreTrainedModel):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
-        sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-        if decoder_input_ids is None and self.retriever is not None:
-            decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
+        if self.ra_decoder is not None:
+            sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
+            sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-        if decoder_manyhot_ids is not None:
-            if decoder_input_ids is not None:
-                decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
-                decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
-            else:
-                decoder_input_ids = self.resize_decoder_inputs(decoder_manyhot_ids)
+            if (decoder_input_ids is None and decoder_manyhot_ids is None) and self.retriever is not None:
+                decoder_input_ids, decoder_manyhot_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
 
-        # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
-        decoder_outputs = self.ra_decoder(
-            input_ids=None,
-            attention_mask=sequence_cls_mask,
-            encoder_hidden_states=decoder_input_ids,
-            encoder_attention_mask=decoder_attention_mask,
-            head_mask=None,
-            cross_attn_head_mask=None,
-            past_key_values=None,
-            inputs_embeds=sequence_cls_output,
-            use_cache=None,
-            output_attentions=output_attentions,
-            output_hidden_states=output_hidden_states,
-            return_dict=return_dict,
-        )
+            if decoder_manyhot_ids is not None:
+                if decoder_input_ids is not None:
+                    decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
+                    decoder_input_ids = self.resize_decoder_inputs(decoder_input_ids)
+                else:
+                    decoder_input_ids = self.resize_decoder_inputs(decoder_manyhot_ids)
 
-        sequence_output = decoder_outputs[0]
+            # decoder outputs consists of (dec_features, past_key_value, dec_hidden, dec_attn)
+            decoder_outputs = self.ra_decoder(
+                input_ids=None,
+                attention_mask=sequence_cls_mask,
+                encoder_hidden_states=decoder_input_ids,
+                encoder_attention_mask=decoder_attention_mask,
+                head_mask=None,
+                cross_attn_head_mask=None,
+                past_key_values=None,
+                inputs_embeds=sequence_cls_output,
+                use_cache=None,
+                output_attentions=output_attentions,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+
+            sequence_output = decoder_outputs[0]
+        else:
+            sequence_output = encoder_outputs[0]
+
         logits = self.classifier(sequence_output)
 
         loss = None
@@ -237,7 +258,7 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
-            self.retriever = Retriever(config.full_embeddings_path, config.no_neighbors)
+            self.retriever = Retriever(config)
         elif config.retrieval_augmentation:
             self.retriever = None
 
@@ -318,8 +339,8 @@ class RABERTForSequenceClassification(BertPreTrainedModel):
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
 
-            if decoder_input_ids is None and self.retriever is not None:
-                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
+            if (decoder_input_ids is None and decoder_manyhot_ids is None) and self.retriever is not None:
+                decoder_input_ids, decoder_manyhot_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
 
             if decoder_manyhot_ids is not None:
                 if decoder_input_ids is not None:
@@ -404,7 +425,7 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
 
         # retriever
         if config.retrieval_augmentation and config.finetune_retrieval:
-            self.retriever = Retriever(config.full_embeddings_path, config.no_neighbors)
+            self.retriever = Retriever(config)
         elif config.retrieval_augmentation:
             self.retriever = None
 
@@ -485,9 +506,9 @@ class RARoBERTaForSequenceClassification(RobertaPreTrainedModel):
             sequence_cls_output = torch.unsqueeze(encoder_outputs[0][:, 0, :], dim=1)
             sequence_cls_mask = torch.ones_like(sequence_cls_output).to(sequence_cls_output.device)
     
-            if decoder_input_ids is None and self.retriever is not None:
-                decoder_input_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
-
+            if (decoder_input_ids is None and decoder_manyhot_ids is None) and self.retriever is not None:
+                decoder_input_ids, decoder_manyhot_ids = self.retriever(encoder_outputs[0][:, 0, :], doc_idx)
+    
             if decoder_manyhot_ids is not None:
                 if decoder_input_ids is not None:
                     decoder_input_ids = torch.cat([decoder_input_ids, decoder_manyhot_ids], dim=-1)
