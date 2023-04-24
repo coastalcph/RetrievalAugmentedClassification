@@ -14,6 +14,7 @@ def main():
 
     # Required arguments
     parser.add_argument('--dataset_name', default='bioasq-l2')
+    parser.add_argument('--no_neighbors', default=4)
     parser.add_argument('--embeddings_path', default='bioasq-biomedbert-base-embeddings')
     config = parser.parse_args()
 
@@ -38,7 +39,7 @@ def main():
     for document in train_dataset:
         doc_sims = []
         label_sims = []
-        for neighbor in neighbors[document['doc_id']]:
+        for neighbor in neighbors[document['doc_id']][:config.no_neighbors]:
             doc_sims.append(neighbor['sim_score'])
             label_sim = len(set(doc_labels[document['doc_id']]).intersection(doc_labels[neighbor['doc_id']])) / \
                         min(len(doc_labels[document['doc_id']]), len(doc_labels[neighbor['doc_id']]))
