@@ -1,5 +1,19 @@
 # RetrievalAugmentedClassification
 
+This is the code for the paper:
+
+*Retrieval-augmented Multi-label Text Classification. Ilias Chalkidis, and Yova Kementchedjhieva. arXiv. 2023.*
+
+```
+@misc{chalkidis2023retrievalaugmented,
+      title={Retrieval-augmented Multi-label Text Classification}, 
+      author={Ilias Chalkidis and Yova Kementchedjhieva},
+      year={2023},
+      eprint={2305.13058},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
+}
+```
 
 Requirements: `transformers`, `pytorch`, `sentence-transformers`, `datasets`
 
