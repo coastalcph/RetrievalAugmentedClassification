@@ -2,7 +2,7 @@
 
 This is the code for the paper:
 
-*Retrieval-augmented Multi-label Text Classification. Ilias Chalkidis, and Yova Kementchedjhieva. arXiv. 2023.*
+[*Retrieval-augmented Multi-label Text Classification. Ilias Chalkidis, and Yova Kementchedjhieva. arXiv. 2023.*](https://arxiv.org/abs/2305.13058)
 
 ```
 @misc{chalkidis2023retrievalaugmented,
